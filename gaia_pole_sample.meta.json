@@ -1,0 +1,6 @@
+{
+  "rand_fraction": 0.03,
+  "dist_max_pc": 300.0,
+  "n_rows": 97486,
+  "n_fetch_chunks": 100
+}

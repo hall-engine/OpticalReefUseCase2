@@ -1,0 +1,109 @@
+{
+  "n_shell": 97483,
+  "n_selected": 200,
+  "n_bootstrap": 0,
+  "ci_percentiles": [
+    16.0,
+    84.0
+  ],
+  "rand_fraction": 0.03,
+  "n_draws": 2000,
+  "mode": "characterization",
+  "mode_label": "characterization (R=70, SNR>=10/elem)",
+  "exposure_s": 2592000.0,
+  "test_mode": true,
+  "accessible_threshold": 0.05,
+  "config": {
+    "instrument": {
+      "lambda0_m": 5.5e-07,
+      "bandwidth": 0.2,
+      "k_iwa": 3.0,
+      "k_owa": null,
+      "eta_inst": 0.2,
+      "eta_coron": 0.3,
+      "sigma_sys": 0.1,
+      "target_snr": 10.0,
+      "f0_v": 100000000000.0,
+      "nzodi_level": 3.0,
+      "m_v_zodi": 23.0
+    },
+    "montecarlo": {
+      "n_draws": 2000,
+      "seed": 12345,
+      "hz_inner_au": 0.95,
+      "hz_outer_au": 1.67,
+      "a_sampling": "uniform",
+      "ecc_beta_a": 0.867,
+      "ecc_beta_b": 3.03,
+      "ecc_max": 0.8,
+      "planet_radius_m": 6371000.0,
+      "geometric_albedo": 0.3
+    },
+    "survey": {
+      "catalog_path": "gaia_pole_sample.csv",
+      "dist_min_pc": 10.0,
+      "dist_max_pc": 300.0,
+      "rand_fraction": 0.03,
+      "logg_min": 4.0,
+      "teff_min_k": 3900.0,
+      "teff_max_k": 5500.0,
+      "lum_min_lsun": 0.05,
+      "lum_max_lsun": 1.0,
+      "test_max_stars": 200
+    },
+    "drake": {
+      "eta_earth": 0.24
+    },
+    "observation": {
+      "mode": "characterization",
+      "snr_detect": 10.0,
+      "snr_char": 10.0,
+      "spectral_R": 70.0,
+      "exposure_detect_s": 86400.0,
+      "exposure_char_s": 2592000.0
+    },
+    "apertures_m": [
+      4.0,
+      6.0,
+      8.0,
+      15.0,
+      30.0,
+      100.0,
+      300.0,
+      1000.0
+    ],
+    "contrast_scenarios": [
+      {
+        "name": "current_1e-9",
+        "contrast_floor": 1e-09
+      },
+      {
+        "name": "nearterm_1e-10",
+        "contrast_floor": 1e-10
+      },
+      {
+        "name": "goal_1e-11",
+        "contrast_floor": 1e-11
+      }
+    ],
+    "observatories": [
+      [
+        "HabEx",
+        4.0
+      ],
+      [
+        "HWO",
+        6.0
+      ],
+      [
+        "LUVOIR-B",
+        8.0
+      ],
+      [
+        "LUVOIR-A",
+        15.0
+      ]
+    ],
+    "observatory_ref_scenario": "nearterm_1e-10"
+  }
+}
