@@ -1,20 +1,22 @@
 #!/bin/bash
 # ============================================================================
-# submit_fetch.slurm  --  pull the Gaia DR3 catalog, unattended, with retries.
+# submit_fetch.slurm  --  pull the Gaia DR3 catalog, unattended (fetch_local.py).
 #
-# The archive returns HTTP 500 / statement-timeout when it is overloaded. This
-# job just keeps retrying (exponential backoff, capped at 5 min) until it hits a
-# healthy window, so you can submit it and walk away. Writes gaia_pole_sample.csv
-# next to the scripts, then exits (--fetch_only: no analysis).
+# Uses the CHUNKED sync fetch: the gaia_source x astrophysical_parameters join is
+# split into many small random_index chunks (~1000 rows / ~9 s each) and
+# concatenated -- this is what avoids the archive's statement-timeout that killed
+# the single big query. Tries the ESA archive first, falls back to the ARI mirror,
+# waits/re-probes if both are down, so you can submit it and forget it.
+# Writes gaia_pole_sample.csv (+ .meta.json) next to the scripts.
 #
 # Submit:  sbatch submit_fetch.slurm
 # Watch:   tail -f logs/fetch_<jobid>.out
 #
 # *** IMPORTANT: this needs INTERNET. ***
 # CARC Discovery compute nodes generally have outbound internet, so this should
-# work. If every attempt fails instantly with a CONNECTION/DNS error (not a 500),
+# work. If the probe fails instantly with a CONNECTION/DNS error (not a timeout),
 # your compute nodes are walled off -- run it on the LOGIN node instead:
-#     nohup python run.py --fetch_only --rand_fraction 0.1 > fetch.log 2>&1 &
+#     nohup python fetch_local.py --rand_fraction 0.1 > fetch.log 2>&1 &
 # ============================================================================
 #SBATCH --job-name=reef_fetch
 #SBATCH --output=logs/fetch_%j.out
@@ -37,25 +39,16 @@ echo "using python: $(which python)"
 
 mkdir -p logs
 
-# Two-stage fetch: try the full-analysis fraction a few times; if it won't go
-# (e.g. the big join keeps hitting the archive's statement timeout), fall back to
-# the proven smaller fraction with long retries so it still rides out any overload.
-FRAC_MAIN=0.1        ; TRIES_MAIN=10        # ~40 min of attempts
-FRAC_FALLBACK=0.03   ; TRIES_FALLBACK=250   # fills the rest of the 24 h window
+# Full-analysis fraction. 0.1 ~ 333 chunks ~ ~50 min on a healthy mirror.
+# (Set 0.03 for the ~15-min, 100-chunk sample that matches the original catalog.)
+FRAC=0.1
 
-echo "=== stage 1: trying rand_fraction=${FRAC_MAIN} (${TRIES_MAIN} attempts) ==="
-python -u run.py --fetch_only --rand_fraction ${FRAC_MAIN} --fetch_retries ${TRIES_MAIN}
+python -u fetch_local.py --rand_fraction ${FRAC} --probe_timeout 20
 rc=$?
-
-if [ $rc -ne 0 ]; then
-    echo "=== stage 1 failed (rc=${rc}); falling back to rand_fraction=${FRAC_FALLBACK} ==="
-    python -u run.py --fetch_only --rand_fraction ${FRAC_FALLBACK} --fetch_retries ${TRIES_FALLBACK}
-    rc=$?
-fi
 
 if [ $rc -eq 0 ]; then
     echo "FETCH DONE -> gaia_pole_sample.csv  (now: sbatch submit_cube_test.slurm)"
 else
-    echo "FETCH FAILED after both fractions; the archive is likely still down."
+    echo "FETCH FAILED (rc=${rc}); both TAP servers were unreachable -- rerun later."
 fi
 exit $rc
