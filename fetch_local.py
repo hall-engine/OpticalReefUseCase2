@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """
-fetch_local.py  --  one-time Gaia DR3 fetch via TAP *sync*, in CHUNKS.
+fetch_local.py  --  one-time Gaia DR3 fetch via TAP *sync*, chunked + PARALLEL.
 
-Why chunks: the gaia_source x astrophysical_parameters join over a large
-random_index range is expensive and times out as one big query (this is the bug
-that broke us). Splitting the random_index range into many small chunks makes
-each query cheap and fast (~1000 rows / ~10 s), then we concatenate. This is what
-the original working catalog did (its meta says n_fetch_chunks: 100).
+The gaia_source x astrophysical_parameters join over a large random_index range
+times out as one query, so we split it into small random_index chunks (~1000 rows
+/ ~9 s each) and fetch them CONCURRENTLY with a thread pool (each chunk is an
+independent HTTP request that mostly just waits on the server). Plain sync HTTP
+per chunk -- no astroquery/pyvo/async. Tries ESA first, then the ARI mirror.
 
-Plain synchronous HTTP per chunk (requests only -- no astroquery/pyvo/async).
-Tries the ESA archive first, falls back to the ARI-Heidelberg mirror. Writes
-gaia_pole_sample.csv (+ .meta.json) in the pipeline's format.
+Writes gaia_pole_sample.csv (+ .meta.json) in the pipeline's format.
 
-    python3 fetch_local.py --rand_fraction 0.0005   # tiny test
-    python3 fetch_local.py --rand_fraction 0.1      # full analysis
+    python3 fetch_local.py --rand_fraction 0.0005            # tiny test
+    python3 fetch_local.py --rand_fraction 0.1 --workers 12  # full analysis
 """
 
 from __future__ import annotations
@@ -24,6 +22,7 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import requests
@@ -62,8 +61,8 @@ def fetch_chunk(url, query, timeout):
     return pd.read_csv(io.StringIO(r.text))
 
 
-def get_chunk(url, lo, hi, args):
-    """Fetch one chunk from a chosen server, retrying transient errors."""
+def fetch_one(url, lo, hi, args):
+    """Fetch a single chunk with a few quick retries. Returns a DataFrame."""
     q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc)
     last = None
     for attempt in range(1, args.retries + 1):
@@ -71,27 +70,44 @@ def get_chunk(url, lo, hi, args):
             return fetch_chunk(url, q, args.chunk_timeout)
         except Exception as exc:                        # noqa: BLE001
             last = exc
-            print(f"     attempt {attempt}/{args.retries} failed: "
-                  f"{type(exc).__name__}: {str(exc)[:90]}", flush=True)
-            time.sleep(min(5 * attempt, 20))
-    raise RuntimeError(f"chunk {lo}-{hi} failed: {last}")
+            time.sleep(min(2 * attempt, 8))
+    raise RuntimeError(f"chunk {lo}-{hi}: {type(last).__name__}: {str(last)[:80]}")
 
 
 def probe(lo, hi, args):
-    """Try the servers in order on the (lo, hi) chunk; return (name, url, df) for
-    the first that works. Used at the start and to re-select a live server if the
-    current one dies mid-run (so an unattended job self-heals)."""
+    """Try servers in order on one chunk; return (name, url) of the first that works."""
     q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc)
     for name, url in SERVERS:
         print(f">> probing {name} (up to {args.probe_timeout:.0f}s) ...", flush=True)
         try:
-            df = fetch_chunk(url, q, args.probe_timeout)
-            print(f"   using {name} ({len(df)} rows)", flush=True)
-            return name, url, df
+            fetch_chunk(url, q, args.probe_timeout)
+            print(f"   using {name}", flush=True)
+            return name, url
         except Exception as exc:                        # noqa: BLE001
             print(f"   {name} unavailable: {type(exc).__name__}: "
-                  f"{str(exc)[:90]}", flush=True)
-    return None, None, None
+                  f"{str(exc)[:80]}", flush=True)
+    return None, None
+
+
+def fetch_ranges(url, ranges, args, label=""):
+    """Fetch many chunks concurrently. Returns (results dict, failed list)."""
+    results, failed = {}, []
+    done = 0
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        futs = {ex.submit(fetch_one, url, lo, hi, args): (lo, hi) for lo, hi in ranges}
+        for fut in as_completed(futs):
+            key = futs[fut]
+            try:
+                results[key] = fut.result()
+            except Exception:                           # noqa: BLE001
+                failed.append(key)
+            done += 1
+            if done % args.workers == 0 or done == len(ranges):
+                rows = sum(len(d) for d in results.values())
+                print(f"   {label}{done}/{len(ranges)} chunks, {rows:,} rows, "
+                      f"{len(failed)} failed, {time.time()-t0:.0f}s", flush=True)
+    return results, failed
 
 
 def main():
@@ -102,66 +118,49 @@ def main():
     p.add_argument("--dist_max_pc", type=float, default=300.0)
     p.add_argument("--chunk_size", type=int, default=540_000,
                    help="random_index span per chunk (~955 rows/~9s at this value)")
-    p.add_argument("--chunk_timeout", type=float, default=120.0)
-    p.add_argument("--probe_timeout", type=float, default=45.0,
-                   help="timeout for the initial server probe (dead ESA fails fast)")
-    p.add_argument("--retries", type=int, default=5, help="attempts per chunk on a server")
-    p.add_argument("--probe_retries", type=int, default=30,
-                   help="times to re-probe (waiting) if BOTH servers are down")
-    p.add_argument("--probe_wait", type=float, default=120.0,
-                   help="seconds between probe rounds when both servers are down")
+    p.add_argument("--workers", type=int, default=12,
+                   help="concurrent chunk requests (lower if the server rate-limits)")
+    p.add_argument("--chunk_timeout", type=float, default=45.0,
+                   help="per-request timeout; a stall fails fast instead of hanging")
+    p.add_argument("--probe_timeout", type=float, default=15.0)
+    p.add_argument("--retries", type=int, default=4, help="attempts per chunk")
     p.add_argument("--out", default="gaia_pole_sample.csv")
     args = p.parse_args()
 
     rand_end = int(args.rand_fraction * RAND_MAX)
     edges = list(range(0, rand_end, args.chunk_size)) + [rand_end]
-    n_chunks = len(edges) - 1
+    ranges = [(edges[i], edges[i + 1] - 1) for i in range(len(edges) - 1)]
     print(f">> fetch rand_fraction={args.rand_fraction} "
-          f"({args.dist_min_pc}-{args.dist_max_pc} pc) in {n_chunks} chunks "
-          f"of {args.chunk_size:,} random_index each", flush=True)
+          f"({args.dist_min_pc}-{args.dist_max_pc} pc): {len(ranges)} chunks x "
+          f"{args.chunk_size:,}, {args.workers} parallel workers", flush=True)
 
-    def probe_with_wait(lo, hi):
-        """Probe both servers, waiting/retrying if both are down (unattended-safe)."""
-        for r in range(1, args.probe_retries + 1):
-            name, url, df = probe(lo, hi, args)
-            if url is not None:
-                return name, url, df
-            print(f">> both servers down (probe round {r}/{args.probe_retries}); "
-                  f"waiting {args.probe_wait:.0f}s ...", flush=True)
-            time.sleep(args.probe_wait)
-        return None, None, None
+    server, url = probe(ranges[0][0], ranges[0][1], args)
+    if url is None:
+        sys.exit(">> no TAP server responded; try again later.")
 
     t0 = time.time()
-    server, url, df0 = probe_with_wait(edges[0], edges[1] - 1)
-    if url is None:
-        sys.exit(">> no TAP server responded after all probe rounds; rerun later.")
-    parts = [df0]
-    print(f"   chunk 1/{n_chunks} [{server}]: {len(df0)} rows", flush=True)
+    results, failed = fetch_ranges(url, ranges, args)
 
-    for i in range(1, n_chunks):
-        lo, hi = edges[i], edges[i + 1] - 1
-        try:
-            df = get_chunk(url, lo, hi, args)
-        except Exception as exc:                        # chosen server died mid-run
-            print(f"   chunk {i+1} failed on {server} ({str(exc)[:80]}); "
-                  f"re-probing servers ...", flush=True)
-            server, url, df = probe_with_wait(lo, hi)    # returns this chunk's df too
-            if url is None:
-                sys.exit(f">> all servers down at chunk {i+1}; rerun later "
-                         f"(nothing saved yet).")
-        parts.append(df)
-        total = sum(len(d) for d in parts)
-        print(f"   chunk {i+1}/{n_chunks} [{server}]: {len(df)} rows "
-              f"(cumulative {total:,}, {time.time()-t0:.0f}s elapsed)", flush=True)
+    # one retry pass for stragglers (re-probe in case the server changed)
+    if failed:
+        print(f">> retrying {len(failed)} failed chunks ...", flush=True)
+        s2, u2 = probe(failed[0][0], failed[0][1], args)
+        if u2:
+            more, failed = fetch_ranges(u2, failed, args, label="retry ")
+            results.update(more)
 
-    cat = pd.concat(parts, ignore_index=True).drop_duplicates("source_id")
+    if failed:
+        sys.exit(f">> {len(failed)} chunks still failed after retries; "
+                 f"rerun to fill them (or lower --workers).")
+
+    cat = pd.concat(results.values(), ignore_index=True).drop_duplicates("source_id")
     cat.to_csv(args.out, index=False)
     with open(os.path.splitext(args.out)[0] + ".meta.json", "w") as fh:
         json.dump({"rand_fraction": args.rand_fraction,
                    "dist_min_pc": args.dist_min_pc,
                    "dist_max_pc": args.dist_max_pc,
                    "n_rows": int(len(cat)),
-                   "n_fetch_chunks": n_chunks}, fh, indent=2)
+                   "n_fetch_chunks": len(ranges)}, fh, indent=2)
     print(f">> DONE: {len(cat):,} rows -> {args.out} (+ .meta.json) "
           f"in {time.time()-t0:.0f}s", flush=True)
 
