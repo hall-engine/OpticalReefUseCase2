@@ -23,8 +23,8 @@ python run.py --test
 # full local run against the whole cached catalog (all selected stars)
 python run.py --out_dir results_full
 
-# fetch a fresh DR3 slice first (needs internet)
-python run.py --fetch --rand_fraction 0.03 --out_dir results_full
+# (re)fetch the catalog first (needs internet) -- chunked TAP, ESA -> ARI mirror
+python3 fetch_local.py --rand_fraction 0.03
 
 # physics invariant checks (no data needed)
 python test_physics.py
@@ -150,7 +150,7 @@ near-term / Reef goal).
 
 The pipeline is already fully vectorised and single-machine friendly. To scale:
 
-1. Fetch a larger DR3 fraction: `python run.py --fetch --rand_fraction 0.3`.
+1. Fetch a larger DR3 fraction: `python3 fetch_local.py --rand_fraction 0.3`.
 2. Drop `--test` so **all** selected stars run; raise `--n_draws` for smoother
    per-star probabilities (memory ≈ `n_stars × n_draws × 8 bytes × ~6 arrays`).
 3. For very large samples, shard the catalog by `source_id` across nodes and sum

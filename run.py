@@ -12,9 +12,7 @@ Full local run against the whole cached catalog:
 
     python run.py --out_dir results_full
 
-Fetch a fresh DR3 slice first (needs internet):
-
-    python run.py --fetch --rand_fraction 0.03
+The catalog (gaia_pole_sample.csv) is produced separately by fetch_local.py.
 
 Common knobs:
     --n_draws N          orbital draws per star            [config default 2000]
@@ -71,10 +69,6 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--test", action="store_true",
                    help="fast mode: subsample the catalog to --max_stars")
-    p.add_argument("--fetch", action="store_true",
-                   help="query Gaia DR3 for a fresh slice before running")
-    p.add_argument("--rand_fraction", type=float, default=0.03,
-                   help="DR3 random_index fraction to fetch (--fetch)")
     p.add_argument("--out_dir", default="results")
     p.add_argument("--catalog", default=None, help="path to cached DR3 CSV")
     p.add_argument("--n_draws", type=int, default=None)
@@ -98,31 +92,11 @@ def main():
                    help="enable outer working angle = k_owa * lambda/D")
     p.add_argument("--bootstrap", type=int, default=0,
                    help="bootstrap resamples of the stellar sample for CIs (0=off)")
-    p.add_argument("--fetch_retries", type=int, default=100,
-                   help="max fetch attempts per server (exp backoff); survives outages")
-    p.add_argument("--fetch_only", action="store_true",
-                   help="fetch the catalog and exit (no analysis)")
-    p.add_argument("--mirror", nargs="+", default=None,
-                   help="TAP mirror URL(s) to try if ESA fails (default: ARI-Heidelberg)")
-    p.add_argument("--no_mirror", action="store_true",
-                   help="disable mirror fallback (query ESA only)")
     p.add_argument("--no_plots", action="store_true")
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     cfg = build_config(args)
-
-    if args.fetch or args.fetch_only:
-        import catalog
-        fetch_path = os.path.join(base_dir, cfg.survey.catalog_path)
-        print(f">> fetching Gaia DR3 slice (rand_fraction={args.rand_fraction}) "
-              f"...", flush=True)
-        mirrors = [] if args.no_mirror else args.mirror   # None -> DEFAULT_MIRRORS
-        catalog.fetch_catalog(cfg.survey, args.rand_fraction, fetch_path,
-                              max_attempts=args.fetch_retries, mirrors=mirrors)
-        print(f">> saved to {fetch_path}")
-        if args.fetch_only:
-            return
 
     result = pipeline.run(cfg, base_dir=base_dir, test_mode=args.test,
                           n_bootstrap=args.bootstrap)

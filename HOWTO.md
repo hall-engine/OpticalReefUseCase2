@@ -46,9 +46,8 @@ Build the full trade cube (aperture × contrast × integration time × k_OWA) on
 cluster, download one file, make every figure locally without rerunning.
 
     # on CARC:
-    sbatch submit_cube_test.slurm                  # 1) ALWAYS test first (~seconds)
-    #   (optional) bigger sample, on the LOGIN node (compute has no internet):
-    python run.py --fetch --rand_fraction 1.0
+    sbatch submit_fetch.slurm                      # 0) get the catalog (chunked TAP)
+    sbatch submit_cube_test.slurm                  # 1) test the cube path (~seconds)
     sbatch submit_cube.slurm                       # 2) single node -> cube.h5
 
     # Single node is enough: ~20 min (cached 3% sample) to ~10 h (full DR3), both
