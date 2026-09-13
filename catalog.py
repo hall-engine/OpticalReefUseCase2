@@ -55,26 +55,65 @@ def load_catalog(survey: SurveyConfig, base_dir: str = ".") -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+# TAP mirrors that host the SAME gaiadr3 schema (gaia_source +
+# astrophysical_parameters), so our query runs against them unchanged. Tried in
+# order when the ESA archive is unreachable.
+DEFAULT_MIRRORS = ["https://gaia.ari.uni-heidelberg.de/tap"]  # ARI-Heidelberg
+
+
 def _is_transient(exc) -> bool:
     """True for errors worth retrying (server 5xx, connection/timeout);
-    False for clear client-side errors (4xx / bad query) that won't self-heal."""
-    s = str(exc)
+    False for clear client-side errors (4xx / bad query / missing table) that
+    won't self-heal -- those make us give up on this server and try the next."""
+    s = str(exc).lower()
+    for kw in ("not found", "unknown table", "does not exist", "undefined",
+               "syntax", "unrecognized"):
+        if kw in s:
+            return False
     for code in ("400", "401", "403", "404", "405", "413"):
-        if code in s:
+        if code in str(exc):
             return False
     return True
 
 
+def _run_query(client, query, name, attempts, base_wait, max_wait):
+    """Run `query` on one TAP client with exponential-backoff retries. Returns a
+    DataFrame, or raises after `attempts` transient failures / on a hard error."""
+    for attempt in range(1, attempts + 1):
+        try:
+            job = client.launch_job_async(query, dump_to_file=False)
+            return job.get_results().to_pandas()
+        except Exception as exc:                       # noqa: BLE001 (want broad here)
+            if not _is_transient(exc):
+                print(f"   {name}: hard error ({type(exc).__name__}: {exc}); "
+                      f"skipping this server", flush=True)
+                raise
+            if attempt >= attempts:
+                print(f"   {name}: still failing after {attempts} attempts",
+                      flush=True)
+                raise
+            wait = min(base_wait * 2 ** (attempt - 1), max_wait)
+            print(f"   {name}: attempt {attempt}/{attempts} failed "
+                  f"({type(exc).__name__}: {exc}); retrying in {wait:.0f}s ...",
+                  flush=True)
+            time.sleep(wait)
+
+
 def fetch_catalog(survey: SurveyConfig, rand_fraction: float, out_path: str,
-                  max_attempts: int = 100, base_wait: float = 15.0,
-                  max_wait: float = 300.0) -> pd.DataFrame:
+                  max_attempts: int = 100, primary_attempts: int = 5,
+                  base_wait: float = 15.0, max_wait: float = 300.0,
+                  mirrors=None) -> pd.DataFrame:
     """Query Gaia DR3 for a random `rand_fraction` slice within the distance
     shell and save it to `out_path` (+ a .meta.json). Requires internet.
 
-    The Gaia archive returns transient HTTP 5xx errors under load, so the query
-    is retried with exponential backoff (capped at `max_wait`). With the defaults
-    it keeps trying for hours, so a submitted/backgrounded fetch survives outages
-    unattended. Only genuine client errors (4xx) abort immediately.
+    Robust to Gaia archive outages:
+      * transient errors (5xx / connection / timeout) are retried with
+        exponential backoff (capped at `max_wait`);
+      * if the ESA archive keeps failing (after `primary_attempts`), it falls
+        back to TAP mirror(s) with the same gaiadr3 schema and retries there
+        (up to `max_attempts` each).
+    Pass mirrors=[] to disable the fallback (ESA only); mirrors=None uses
+    DEFAULT_MIRRORS. Only genuine client/schema errors abort a given server.
     """
     from astroquery.gaia import Gaia  # imported lazily so offline tests don't need it
 
@@ -97,20 +136,30 @@ def fetch_catalog(survey: SurveyConfig, rand_fraction: float, out_path: str,
       AND ap.logg_gspphot IS NOT NULL
       AND g.random_index BETWEEN 0 AND {rand_end}
     """
+
+    mirror_list = DEFAULT_MIRRORS if mirrors is None else list(mirrors)
+    # (name, client, attempts). ESA gets the full budget when there is no mirror
+    # to fall back to, else just a few tries before switching.
+    esa_attempts = primary_attempts if mirror_list else max_attempts
+    backends = [("ESA archive", Gaia, esa_attempts)]
+    if mirror_list:
+        from astroquery.utils.tap.core import TapPlus
+        for url in mirror_list:
+            backends.append((f"mirror {url}", TapPlus(url=url), max_attempts))
+
     df = None
-    for attempt in range(1, max_attempts + 1):
+    last_exc = None
+    for name, client, attempts in backends:
+        print(f">> querying {name} ({attempts} attempts max) ...", flush=True)
         try:
-            job = Gaia.launch_job_async(query, dump_to_file=False)
-            df = job.get_results().to_pandas()
+            df = _run_query(client, query, name, attempts, base_wait, max_wait)
+            print(f">> got {len(df)} rows from {name}", flush=True)
             break
-        except Exception as exc:                       # noqa: BLE001 (want broad here)
-            if attempt >= max_attempts or not _is_transient(exc):
-                raise
-            wait = min(base_wait * 2 ** (attempt - 1), max_wait)
-            print(f"   Gaia fetch attempt {attempt}/{max_attempts} failed "
-                  f"({type(exc).__name__}: {exc}); retrying in {wait:.0f}s ...",
-                  flush=True)
-            time.sleep(wait)
+        except Exception as exc:                       # noqa: BLE001
+            last_exc = exc
+            continue
+    if df is None:
+        raise RuntimeError(f"all TAP servers failed; last error: {last_exc}")
 
     df.to_csv(out_path, index=False)
     with open(_meta_path(out_path), "w") as fh:

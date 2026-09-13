@@ -99,9 +99,13 @@ def main():
     p.add_argument("--bootstrap", type=int, default=0,
                    help="bootstrap resamples of the stellar sample for CIs (0=off)")
     p.add_argument("--fetch_retries", type=int, default=100,
-                   help="max Gaia fetch attempts (exp backoff); survives outages")
+                   help="max fetch attempts per server (exp backoff); survives outages")
     p.add_argument("--fetch_only", action="store_true",
                    help="fetch the catalog and exit (no analysis)")
+    p.add_argument("--mirror", nargs="+", default=None,
+                   help="TAP mirror URL(s) to try if ESA fails (default: ARI-Heidelberg)")
+    p.add_argument("--no_mirror", action="store_true",
+                   help="disable mirror fallback (query ESA only)")
     p.add_argument("--no_plots", action="store_true")
     args = p.parse_args()
 
@@ -113,8 +117,9 @@ def main():
         fetch_path = os.path.join(base_dir, cfg.survey.catalog_path)
         print(f">> fetching Gaia DR3 slice (rand_fraction={args.rand_fraction}) "
               f"...", flush=True)
+        mirrors = [] if args.no_mirror else args.mirror   # None -> DEFAULT_MIRRORS
         catalog.fetch_catalog(cfg.survey, args.rand_fraction, fetch_path,
-                              max_attempts=args.fetch_retries)
+                              max_attempts=args.fetch_retries, mirrors=mirrors)
         print(f">> saved to {fetch_path}")
         if args.fetch_only:
             return
