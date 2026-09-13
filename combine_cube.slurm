@@ -19,6 +19,9 @@
 
 module purge
 module load conda
-source activate optical_reef
+# robust conda activation for a non-interactive (batch) shell:
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate optical_reef
+echo "using python: $(which python)"
 
 python -u run_cube.py --combine parts --out cube.h5
