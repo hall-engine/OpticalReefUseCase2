@@ -124,6 +124,10 @@ def main():
                    help="per-request timeout; a stall fails fast instead of hanging")
     p.add_argument("--probe_timeout", type=float, default=15.0)
     p.add_argument("--retries", type=int, default=4, help="attempts per chunk")
+    p.add_argument("--fill_rounds", type=int, default=4,
+                   help="extra passes to re-fetch any chunks that failed")
+    p.add_argument("--probe_wait", type=float, default=30.0,
+                   help="wait between fill rounds if the server is momentarily down")
     p.add_argument("--out", default="gaia_pole_sample.csv")
     args = p.parse_args()
 
@@ -141,28 +145,40 @@ def main():
     t0 = time.time()
     results, failed = fetch_ranges(url, ranges, args)
 
-    # one retry pass for stragglers (re-probe in case the server changed)
-    if failed:
-        print(f">> retrying {len(failed)} failed chunks ...", flush=True)
-        s2, u2 = probe(failed[0][0], failed[0][1], args)
-        if u2:
-            more, failed = fetch_ranges(u2, failed, args, label="retry ")
-            results.update(more)
+    # fill rounds for any stragglers (re-probe each round in case a server blipped)
+    for rnd in range(1, args.fill_rounds + 1):
+        if not failed:
+            break
+        print(f">> fill round {rnd}/{args.fill_rounds}: {len(failed)} chunks left; "
+              f"re-probing ...", flush=True)
+        _, u2 = probe(failed[0][0], failed[0][1], args)
+        if u2 is None:
+            time.sleep(args.probe_wait)
+            continue
+        more, failed = fetch_ranges(u2, failed, args, label=f"fill{rnd} ")
+        results.update(more)
 
-    if failed:
-        sys.exit(f">> {len(failed)} chunks still failed after retries; "
-                 f"rerun to fill them (or lower --workers).")
+    if not results:
+        sys.exit(">> no chunks fetched at all; servers unreachable, rerun later.")
 
+    # always write what we have -- disjoint chunks stay a valid random subset
     cat = pd.concat(results.values(), ignore_index=True).drop_duplicates("source_id")
     cat.to_csv(args.out, index=False)
+    got = len(ranges) - len(failed)
     with open(os.path.splitext(args.out)[0] + ".meta.json", "w") as fh:
         json.dump({"rand_fraction": args.rand_fraction,
                    "dist_min_pc": args.dist_min_pc,
                    "dist_max_pc": args.dist_max_pc,
                    "n_rows": int(len(cat)),
-                   "n_fetch_chunks": len(ranges)}, fh, indent=2)
-    print(f">> DONE: {len(cat):,} rows -> {args.out} (+ .meta.json) "
-          f"in {time.time()-t0:.0f}s", flush=True)
+                   "n_fetch_chunks": got,
+                   "n_chunks_planned": len(ranges),
+                   "n_chunks_missing": len(failed)}, fh, indent=2)
+    print(f">> DONE: {len(cat):,} rows from {got}/{len(ranges)} chunks -> "
+          f"{args.out} (+ .meta.json) in {time.time()-t0:.0f}s", flush=True)
+    if failed:
+        print(f">> NOTE: {len(failed)} chunks never succeeded; the sample is "
+              f"slightly smaller but still an unbiased random subset. Rerun to "
+              f"top up if you want the full fraction.", flush=True)
 
 
 if __name__ == "__main__":
