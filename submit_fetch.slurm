@@ -32,10 +32,25 @@ source activate optical_reef
 
 mkdir -p logs
 
-# Fraction of DR3 to pull. 0.1 = full-analysis default (see notes); 0.03 = quick.
-FRAC=0.1
+# Two-stage fetch: try the full-analysis fraction a few times; if it won't go
+# (e.g. the big join keeps hitting the archive's statement timeout), fall back to
+# the proven smaller fraction with long retries so it still rides out any overload.
+FRAC_MAIN=0.1        ; TRIES_MAIN=10        # ~40 min of attempts
+FRAC_FALLBACK=0.03   ; TRIES_FALLBACK=250   # fills the rest of the 24 h window
 
-# --fetch_retries 250 with 5-min cap ~ keeps trying for the whole 24 h window.
-python -u run.py --fetch_only --rand_fraction ${FRAC} --fetch_retries 250
+echo "=== stage 1: trying rand_fraction=${FRAC_MAIN} (${TRIES_MAIN} attempts) ==="
+python -u run.py --fetch_only --rand_fraction ${FRAC_MAIN} --fetch_retries ${TRIES_MAIN}
+rc=$?
 
-echo "FETCH DONE -> gaia_pole_sample.csv  (now: sbatch submit_cube_test.slurm)"
+if [ $rc -ne 0 ]; then
+    echo "=== stage 1 failed (rc=${rc}); falling back to rand_fraction=${FRAC_FALLBACK} ==="
+    python -u run.py --fetch_only --rand_fraction ${FRAC_FALLBACK} --fetch_retries ${TRIES_FALLBACK}
+    rc=$?
+fi
+
+if [ $rc -eq 0 ]; then
+    echo "FETCH DONE -> gaia_pole_sample.csv  (now: sbatch submit_cube_test.slurm)"
+else
+    echo "FETCH FAILED after both fractions; the archive is likely still down."
+fi
+exit $rc
