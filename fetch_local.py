@@ -21,6 +21,7 @@ import io
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -32,6 +33,30 @@ SERVERS = [
     ("ESA archive", "https://gea.esac.esa.int/tap-server/tap/sync"),
     ("ARI mirror",  "https://gaia.ari.uni-heidelberg.de/tap/sync"),
 ]
+
+
+class RateLimiter:
+    """Enforce a minimum interval between request *starts* across all threads,
+    so the client stays under a server's per-IP rate limit regardless of how
+    many workers are running."""
+    def __init__(self, min_interval):
+        self.min_interval = float(min_interval)
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self):
+        if self.min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            start = max(now, self._next)
+            self._next = start + self.min_interval
+        gap = start - time.monotonic()
+        if gap > 0:
+            time.sleep(gap)
+
+
+_LIMITER = None   # set in main() from --delay
 
 
 def chunk_query(lo, hi, dist_min_pc, dist_max_pc):
@@ -54,6 +79,8 @@ def chunk_query(lo, hi, dist_min_pc, dist_max_pc):
 
 
 def fetch_chunk(url, query, timeout):
+    if _LIMITER is not None:
+        _LIMITER.wait()                 # pace request starts (per-IP rate limit)
     r = requests.get(url, params={"REQUEST": "doQuery", "LANG": "ADQL",
                                   "FORMAT": "csv", "QUERY": query,
                                   "MAXREC": "1000000"}, timeout=timeout)
@@ -118,8 +145,11 @@ def main():
     p.add_argument("--dist_max_pc", type=float, default=300.0)
     p.add_argument("--chunk_size", type=int, default=540_000,
                    help="random_index span per chunk (~955 rows/~9s at this value)")
-    p.add_argument("--workers", type=int, default=12,
+    p.add_argument("--workers", type=int, default=6,
                    help="concurrent chunk requests (lower if the server rate-limits)")
+    p.add_argument("--delay", type=float, default=0.0,
+                   help="min seconds between request STARTS (paces the request "
+                        "rate under a per-IP limit; e.g. 1.0). Independent of --workers.")
     p.add_argument("--chunk_timeout", type=float, default=45.0,
                    help="per-request timeout; a stall fails fast instead of hanging")
     p.add_argument("--probe_timeout", type=float, default=15.0)
@@ -130,6 +160,10 @@ def main():
                    help="wait between fill rounds if the server is momentarily down")
     p.add_argument("--out", default="gaia_pole_sample.csv")
     args = p.parse_args()
+
+    global _LIMITER
+    if args.delay > 0:
+        _LIMITER = RateLimiter(args.delay)
 
     rand_end = int(args.rand_fraction * RAND_MAX)
     edges = list(range(0, rand_end, args.chunk_size)) + [rand_end]
