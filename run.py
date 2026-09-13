@@ -98,18 +98,26 @@ def main():
                    help="enable outer working angle = k_owa * lambda/D")
     p.add_argument("--bootstrap", type=int, default=0,
                    help="bootstrap resamples of the stellar sample for CIs (0=off)")
+    p.add_argument("--fetch_retries", type=int, default=100,
+                   help="max Gaia fetch attempts (exp backoff); survives outages")
+    p.add_argument("--fetch_only", action="store_true",
+                   help="fetch the catalog and exit (no analysis)")
     p.add_argument("--no_plots", action="store_true")
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     cfg = build_config(args)
 
-    if args.fetch:
+    if args.fetch or args.fetch_only:
         import catalog
         fetch_path = os.path.join(base_dir, cfg.survey.catalog_path)
-        print(f">> fetching Gaia DR3 slice (rand_fraction={args.rand_fraction}) ...")
-        catalog.fetch_catalog(cfg.survey, args.rand_fraction, fetch_path)
+        print(f">> fetching Gaia DR3 slice (rand_fraction={args.rand_fraction}) "
+              f"...", flush=True)
+        catalog.fetch_catalog(cfg.survey, args.rand_fraction, fetch_path,
+                              max_attempts=args.fetch_retries)
         print(f">> saved to {fetch_path}")
+        if args.fetch_only:
+            return
 
     result = pipeline.run(cfg, base_dir=base_dir, test_mode=args.test,
                           n_bootstrap=args.bootstrap)
