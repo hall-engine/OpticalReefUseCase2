@@ -53,7 +53,7 @@ def _cloud_panel(ax, xyz, mask, style, cap, elev, azim):
                edgecolors=ink, linewidths=0.3, depthshade=False)
     ax.set_xlim(-cap, cap); ax.set_ylim(-cap, cap); ax.set_zlim(-cap, cap)
     try:
-        ax.set_box_aspect((1, 1, 1), zoom=1.35)   # fill more of the cell
+        ax.set_box_aspect((1, 1, 1), zoom=1.18)   # fill the cell without spilling
     except TypeError:                              # older mpl: no zoom kwarg
         ax.set_box_aspect((1, 1, 1))
     except Exception:
@@ -94,9 +94,9 @@ def make_grid(xyz, orb, g, lum, inst, bw, snr, thr, diameters, contrasts,
                           fontsize=11)
     fig.suptitle(f"detectable HZ Earth analogs within {cap:.0f} pc  —  "
                  f"integration {fmt_time(t_min)}", color=ink, fontsize=13, y=0.99)
-    # tight: 3D cells are enlarged via zoom, so pull them together and trim margins
-    fig.subplots_adjust(left=0.04, right=0.995, top=0.95, bottom=0.005,
-                        wspace=-0.02, hspace=-0.02)
+    # trim margins; keep spacing >= 0 so adjacent 3D boxes touch but don't overlap
+    fig.subplots_adjust(left=0.04, right=0.995, top=0.95, bottom=0.01,
+                        wspace=0.0, hspace=0.02)
 
     tag = f"{t_min:g}min".replace(".", "p")
     fig.canvas.draw()
