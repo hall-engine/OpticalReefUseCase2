@@ -1,1 +1,17 @@
 .DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Generated analysis outputs: figures, animations, cubes, per-run CSVs.
+# All reproducible from the code + catalog, so keep them out of git.
+results/
+
+# Cached Gaia catalogs (fetched, not versioned)
+gaia_pole_sample.csv
+gaia_pole_sample.meta.json
+gaia_galaxy_context.csv
+gaia_galaxy_context.meta.json
+cube.h5
+cube_test.h5
