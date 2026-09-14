@@ -53,6 +53,8 @@ def _cloud_panel(ax, xyz, mask, style, cap, elev, azim):
                edgecolors=ink, linewidths=0.3, depthshade=False)
     ax.set_xlim(-cap, cap); ax.set_ylim(-cap, cap); ax.set_zlim(-cap, cap)
     try:
+        ax.set_box_aspect((1, 1, 1), zoom=1.35)   # fill more of the cell
+    except TypeError:                              # older mpl: no zoom kwarg
         ax.set_box_aspect((1, 1, 1))
     except Exception:
         pass
@@ -70,7 +72,7 @@ def make_grid(xyz, orb, g, lum, inst, bw, snr, thr, diameters, contrasts,
               t_min, style, cap, elev, azim, dpi, out_dir):
     ink = "white" if style == "dark" else "black"
     nR, nC = len(diameters), len(contrasts)
-    fig = plt.figure(figsize=(3.7 * nC, 3.5 * nR), dpi=dpi)
+    fig = plt.figure(figsize=(3.2 * nC, 3.0 * nR), dpi=dpi)
     if style == "dark":
         fig.patch.set_alpha(0.0)
     for i, D in enumerate(diameters):
@@ -81,17 +83,20 @@ def make_grid(xyz, orb, g, lum, inst, bw, snr, thr, diameters, contrasts,
             ax = fig.add_subplot(nR, nC, i * nC + j + 1, projection="3d")
             _cloud_panel(ax, xyz, mask, style, cap, elev, azim)
             pct = 100.0 * mask.mean()
-            ax.set_title(f"{pct:4.1f}%", color=ink, fontsize=9, pad=-2)
+            ax.text2D(0.5, 0.90, f"{pct:4.1f}%", transform=ax.transAxes,
+                      ha="center", color=ink, fontsize=9)
             if i == 0:
-                ax.text2D(0.5, 1.12, f"contrast {con:.0e}", transform=ax.transAxes,
+                ax.text2D(0.5, 1.0, f"contrast {con:.0e}", transform=ax.transAxes,
                           ha="center", color=ink, fontsize=11)
             if j == 0:
-                ax.text2D(-0.08, 0.5, f"D = {D:g} m", transform=ax.transAxes,
+                ax.text2D(-0.02, 0.5, f"D = {D:g} m", transform=ax.transAxes,
                           va="center", ha="center", rotation=90, color=ink,
                           fontsize=11)
     fig.suptitle(f"detectable HZ Earth analogs within {cap:.0f} pc  —  "
-                 f"integration {fmt_time(t_min)}", color=ink, fontsize=13, y=0.995)
-    fig.tight_layout(rect=[0.02, 0, 1, 0.97])
+                 f"integration {fmt_time(t_min)}", color=ink, fontsize=13, y=0.99)
+    # tight: 3D cells are enlarged via zoom, so pull them together and trim margins
+    fig.subplots_adjust(left=0.04, right=0.995, top=0.95, bottom=0.005,
+                        wspace=-0.02, hspace=-0.02)
 
     tag = f"{t_min:g}min".replace(".", "p")
     fig.canvas.draw()
