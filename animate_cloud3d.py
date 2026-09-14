@@ -81,7 +81,13 @@ def render_frame(xyz, masks_this_frame, scenarios, D, threshold, azim, elev,
     dark = (style == "dark")
     ink = "white" if dark else "black"
     grey = "#c8ccd2" if dark else "#6b7178"
-    grey_alpha = 0.25 if dark else 0.45
+    # Dark frames are saved as a *transparent* GIF, which keys out any pixel with
+    # alpha < 128 (binary transparency, no blending). A faint blended cloud would
+    # be deleted entirely, so on dark draw the grey cloud solidly (higher, uniform
+    # alpha + slightly bigger points, no depth fade) so every star survives keying.
+    grey_alpha = 0.6 if dark else 0.45
+    grey_s = 3.0 if dark else 2.0
+    grey_depth = not dark
     red = "#ff453a" if dark else "#d62728"
     sun = "#ffd60a"
 
@@ -94,12 +100,12 @@ def render_frame(xyz, masks_this_frame, scenarios, D, threshold, azim, elev,
         if dark:
             ax.set_facecolor("none")
         # grey cloud (non-detectable shown faint)
-        ax.scatter(x[~mask], y[~mask], z[~mask], s=2, c=grey, alpha=grey_alpha,
-                   linewidths=0, depthshade=True)
+        ax.scatter(x[~mask], y[~mask], z[~mask], s=grey_s, c=grey, alpha=grey_alpha,
+                   linewidths=0, depthshade=grey_depth)
         # red detectable
         n_red = int(mask.sum())
-        ax.scatter(x[mask], y[mask], z[mask], s=7, c=red, alpha=0.85,
-                   linewidths=0, depthshade=True)
+        ax.scatter(x[mask], y[mask], z[mask], s=7, c=red, alpha=0.9,
+                   linewidths=0, depthshade=grey_depth)
         # Sun
         ax.scatter([0], [0], [0], s=90, c=sun, marker="*",
                    edgecolors=ink, linewidths=0.4, depthshade=False)

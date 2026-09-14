@@ -1,0 +1,11 @@
+{
+  "rand_fraction": 0.0003,
+  "dist_min_pc": 10.0,
+  "dist_max_pc": 12000.0,
+  "poe_min": 5.0,
+  "gmax": 17.0,
+  "n_rows": 34671,
+  "n_fetch_chunks": 2,
+  "n_chunks_planned": 2,
+  "n_chunks_missing": 0
+}

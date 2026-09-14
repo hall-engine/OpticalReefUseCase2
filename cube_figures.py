@@ -57,6 +57,8 @@ class Cube:
         self.tmin = np.asarray(d["times_min"], float)
         self.kowa = np.asarray(d["kowa"], float)
         self.comp = np.asarray(d["completeness"], float)
+        self.sem = (np.asarray(d["completeness_sem"], float)
+                    if "completeness_sem" in d.files else None)
         self.f_iwa = np.asarray(d["frac_iwa"], float)
         self.f_owa = np.asarray(d["frac_owa"], float)
         self.f_snr = np.asarray(d["frac_snr"], float)
@@ -74,6 +76,8 @@ class Cube:
             self.tmin = f["axes/times_min"][:].astype(float)
             self.kowa = f["axes/kowa"][:].astype(float)
             self.comp = f["completeness"][:].astype(float)
+            self.sem = (f["completeness_sem"][:].astype(float)
+                        if "completeness_sem" in f else None)
             self.f_iwa = f["frac_iwa"][:].astype(float)
             self.f_owa = f["frac_owa"][:].astype(float)
             self.f_snr = f["frac_snr"][:].astype(float)
@@ -142,7 +146,12 @@ def fig_3contrast(cube, args, out_dir):
             ax.plot(cube.ap, cube.f_owa[:, ki] * mul, "--", color=C_OWA, lw=1.8)
         for ei, t in enumerate(cube.tmin):
             col = tcmap(1.0) if norm is None else tcmap(norm(t))
-            ax.plot(cube.ap, cube.comp[:, ci, ei, ki] * mul, "-", color=col, lw=2.4)
+            y = cube.comp[:, ci, ei, ki] * mul
+            ax.plot(cube.ap, y, "-", color=col, lw=2.4)
+            if cube.sem is not None and args.err_sigma > 0:
+                e = cube.sem[:, ci, ei, ki] * mul * args.err_sigma
+                ax.fill_between(cube.ap, y - e, y + e, color=col, alpha=0.25,
+                                linewidth=0)
         ax.set_xscale("log")
         _ylims(ax, args.metric, ymax)
         ax.set_xlabel("Aperture diameter D [m]")
@@ -256,10 +265,16 @@ def main():
                    help="contrast floors to show as panels in the 3-contrast figure")
     p.add_argument("--kowa", type=float, default=32.0)
     p.add_argument("--time_min", type=float, default=360.0)
+    p.add_argument("--err_sigma", type=float, default=1.0,
+                   help="shade a +/- N-sigma sampling-error band (bootstrap SEM) "
+                        "around each yield curve; 0 disables")
     args = p.parse_args()
 
     cube = Cube(args.cube)
-    out_dir = args.out_dir or os.path.dirname(os.path.abspath(args.cube)) or "."
+    # default output location, baked in so figures always land in the same place
+    default_out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "results", "cube_figures")
+    out_dir = args.out_dir or default_out
     os.makedirs(out_dir, exist_ok=True)
     print(f">> cube {cube.comp.shape}  ap={len(cube.ap)} con={len(cube.con)} "
           f"time={len(cube.tmin)} kowa={len(cube.kowa)}  n_full={cube.n_full}")

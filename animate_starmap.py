@@ -163,7 +163,7 @@ def save_opaque_gif(frames, path, dur_ms, bg=(255, 255, 255)):
                  duration=dur_ms, loop=0, optimize=True)
 
 
-def save_transparent_gif(frames, path, dur_ms, alpha_thresh=128):
+def save_transparent_gif(frames, path, dur_ms, alpha_thresh=80):
     pal_imgs = []
     for f in frames:
         rgb = Image.fromarray(np.ascontiguousarray(f[..., :3]))

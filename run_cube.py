@@ -98,6 +98,11 @@ def _accumulate(cfg, args, apertures, contrasts, times_min, kowa, base_dir):
     iwa_count = np.zeros(A, dtype=np.int64)
     owa_count = np.zeros((A, K), dtype=np.int64)
     snr_count = np.zeros((A, C, E), dtype=np.int64)
+    # per-star detection-probability accumulators (sum and sum-of-squares over
+    # stars) -> gives the standard error over the stellar sample per cell, i.e.
+    # the (large-n) bootstrap CI on completeness, at negligible memory cost.
+    ps_sum = np.zeros((A, C, E, K), dtype=np.float64)
+    ps_sqsum = np.zeros((A, C, E, K), dtype=np.float64)
 
     inst = cfg.instrument
     bw = (1.0 / args.spectral_R) if args.mode == "characterization" else inst.bandwidth
@@ -138,12 +143,16 @@ def _accumulate(cfg, args, apertures, contrasts, times_min, kowa, base_dir):
                     snr_count[ai, ci, ei] += int(snr_ok.sum())
                     geo_snr = iwa_ok & snr_ok
                     for ki in range(K):
-                        det_count[ai, ci, ei, ki] += int(
-                            (geo_snr & owa_ok[ki]).sum())
+                        hit = geo_snr & owa_ok[ki]           # (nb, ndraws)
+                        det_count[ai, ci, ei, ki] += int(hit.sum())
+                        pstar = hit.sum(axis=1) / ndraws     # per-star p_det (nb,)
+                        ps_sum[ai, ci, ei, ki] += pstar.sum()
+                        ps_sqsum[ai, ci, ei, ki] += float(np.dot(pstar, pstar))
         print(f"   stars {b1}/{n_sim}", end="\r")
     print()
     return dict(det_count=det_count, iwa_count=iwa_count, owa_count=owa_count,
-                snr_count=snr_count, n_trials=np.int64(n_trials),
+                snr_count=snr_count, ps_sum=ps_sum, ps_sqsum=ps_sqsum,
+                n_trials=np.int64(n_trials),
                 n_sim=np.int64(n_sim), n_full=np.int64(n_full))
 
 
@@ -218,6 +227,12 @@ def _finalize(counts, meta, out_path, fmt="auto"):
     frac_iwa = (counts["iwa_count"] / denom).astype(np.float32)      # (A,)
     frac_owa = (counts["owa_count"] / denom).astype(np.float32)      # (A,K)
     frac_snr = (counts["snr_count"] / denom).astype(np.float32)      # (A,C,E)
+    # standard error of completeness over the stellar sample (per cell):
+    #   var over stars of per-star p_det, then / n_sim  ->  SEM = bootstrap CI.
+    n_sim = float(counts["n_sim"])
+    mean_ps = counts["ps_sum"] / n_sim                              # == completeness
+    var_ps = np.maximum(counts["ps_sqsum"] / n_sim - mean_ps ** 2, 0.0)
+    completeness_sem = np.sqrt(var_ps / n_sim).astype(np.float32)   # (A,C,E,K)
     scalars = {k: v for k, v in meta.items() if k not in AXIS_KEYS}
     scalars.update(n_sim=int(counts["n_sim"]), n_full=int(counts["n_full"]),
                    n_trials=int(counts["n_trials"]))
@@ -230,15 +245,19 @@ def _finalize(counts, meta, out_path, fmt="auto"):
                 gax.create_dataset(k, data=v)
             f.create_dataset("completeness", data=completeness,
                              compression="gzip")
+            f.create_dataset("completeness_sem", data=completeness_sem,
+                             compression="gzip")
             f.create_dataset("frac_iwa", data=frac_iwa)
             f.create_dataset("frac_owa", data=frac_owa)
             f.create_dataset("frac_snr", data=frac_snr)
             f["completeness"].attrs["dims"] = "aperture,contrast,time,kowa"
+            f["completeness_sem"].attrs["dims"] = "aperture,contrast,time,kowa"
             for k, v in scalars.items():
                 f.attrs[k] = _attr_value(v)   # metadata -> file attributes
     else:
         np.savez_compressed(out_path, **axes,
-                            completeness=completeness, frac_iwa=frac_iwa,
+                            completeness=completeness,
+                            completeness_sem=completeness_sem, frac_iwa=frac_iwa,
                             frac_owa=frac_owa, frac_snr=frac_snr, **scalars)
 
     # human-readable JSON sidecar (both formats)
@@ -262,13 +281,15 @@ def combine(parts_dir, out_path, fmt="auto"):
         d = np.load(f, allow_pickle=True)
         if acc is None:
             acc = {k: d[k].copy() for k in
-                   ("det_count", "iwa_count", "owa_count", "snr_count")}
+                   ("det_count", "iwa_count", "owa_count", "snr_count",
+                    "ps_sum", "ps_sqsum")}
             n_trials = d["n_trials"].copy()
             n_sim = d["n_sim"].copy()
             n_full = d["n_full"].copy()
             meta = {k: d[k] for k in d.files
                     if k not in ("det_count", "iwa_count", "owa_count",
-                                 "snr_count", "n_trials", "n_sim", "n_full")}
+                                 "snr_count", "ps_sum", "ps_sqsum",
+                                 "n_trials", "n_sim", "n_full")}
         else:
             for k in acc:
                 acc[k] += d[k]
