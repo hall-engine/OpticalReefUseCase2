@@ -126,10 +126,17 @@ def fig_3contrast(cube, args, out_dir):
     tcmap, norm = _shade(cube.tmin)
     ymax = max(cube.f_iwa.max(), cube.f_owa[:, ki].max()) * mul
 
-    fig, axes = plt.subplots(1, len(cube.con), figsize=(5.6 * len(cube.con), 5.4),
+    # which contrast floors to show as panels (nearest in the cube), de-duped
+    cidx = []
+    for c in args.panels:
+        j = _nearest(cube.con, c)
+        if j not in cidx:
+            cidx.append(j)
+
+    fig, axes = plt.subplots(1, len(cidx), figsize=(5.6 * len(cidx), 5.4),
                              sharex=True, sharey=True)
     axes = np.atleast_1d(axes)
-    for ax, ci in zip(axes, range(len(cube.con))):
+    for ax, ci in zip(axes, cidx):
         ax.plot(cube.ap, cube.f_iwa * mul, "--", color=C_IWA, lw=1.8)
         if cube.kowa[ki] > 0:
             ax.plot(cube.ap, cube.f_owa[:, ki] * mul, "--", color=C_OWA, lw=1.8)
@@ -245,6 +252,8 @@ def main():
     p.add_argument("--metric", choices=["percent", "yield", "completeness"],
                    default="percent")
     p.add_argument("--contrast", type=float, default=1e-10)
+    p.add_argument("--panels", type=float, nargs="+", default=[1e-9, 1e-10, 1e-11],
+                   help="contrast floors to show as panels in the 3-contrast figure")
     p.add_argument("--kowa", type=float, default=32.0)
     p.add_argument("--time_min", type=float, default=360.0)
     args = p.parse_args()

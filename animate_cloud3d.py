@@ -131,6 +131,8 @@ def main():
     p.add_argument("--cap_pc", type=float, default=300.0,
                    help="show stars within this distance [pc]")
     p.add_argument("--threshold", type=float, default=0.5)
+    p.add_argument("--exposure_min", type=float, default=None,
+                   help="detection integration time [minutes] (default: config 5 min)")
     p.add_argument("--max_stars", type=int, default=8000,
                    help="cap stars for a clean/fast cloud (random subsample)")
     p.add_argument("--n_draws", type=int, default=600)
@@ -152,6 +154,8 @@ def main():
         cfg.survey.catalog_path = args.catalog
     # restrict the simulated shell to the display cap: dense cloud + fast compute
     cfg.survey.dist_max_pc = args.cap_pc
+    if args.exposure_min is not None:      # detection integration time [minutes]
+        cfg.observation.exposure_detect_s = args.exposure_min * 60.0
 
     apertures = np.geomspace(args.dmin, args.dmax, args.n_frames)
     stars, masks, scenarios = compute_masks(
