@@ -1,6 +1,9 @@
 {
-  "rand_fraction": 0.03,
+  "rand_fraction": 0.1,
+  "dist_min_pc": 10.0,
   "dist_max_pc": 300.0,
-  "n_rows": 97486,
-  "n_fetch_chunks": 100
+  "n_rows": 324622,
+  "n_fetch_chunks": 334,
+  "n_chunks_planned": 334,
+  "n_chunks_missing": 0
 }
