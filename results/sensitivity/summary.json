@@ -1,0 +1,60 @@
+{
+  "design": {
+    "D": 15.0,
+    "contrast": 1e-10,
+    "kowa": 32.0,
+    "exp_s": 21600.0
+  },
+  "mode": "detection",
+  "n_mc": 1500,
+  "n_sim": 30000,
+  "n_full": 80778,
+  "baseline_yield": 39.9689544,
+  "baseline_completeness": 0.00020616666666666667,
+  "mc_mean": 44.76006422238828,
+  "mc_std": 23.168154914373424,
+  "mc_median": 39.962177419210406,
+  "mc_p16": 21.51298406765237,
+  "mc_p84": 68.72425042562482,
+  "mc_p2p5": 11.402530727648395,
+  "mc_p97p5": 96.693576625799,
+  "mc_rel_sigma": 0.5176077227964538,
+  "oat_ranking": [
+    {
+      "parameter": "eta_earth",
+      "abs_range": 66.614924
+    },
+    {
+      "parameter": "radius_factor",
+      "abs_range": 28.4984784
+    },
+    {
+      "parameter": "geometric_albedo",
+      "abs_range": 23.9964512
+    },
+    {
+      "parameter": "eta_coron",
+      "abs_range": 19.0959192
+    },
+    {
+      "parameter": "nzodi_level",
+      "abs_range": 13.021413599999999
+    },
+    {
+      "parameter": "sigma_sys",
+      "abs_range": 9.5425744
+    },
+    {
+      "parameter": "eta_inst",
+      "abs_range": 8.120881600000004
+    },
+    {
+      "parameter": "hz_outer_au",
+      "abs_range": 3.1880384000000035
+    },
+    {
+      "parameter": "hz_inner_au",
+      "abs_range": 0.7970095999999955
+    }
+  ]
+}
