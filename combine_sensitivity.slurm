@@ -32,9 +32,9 @@ export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
 mkdir -p logs
 
 # ---- settings (KEEP IN SYNC with submit_sensitivity_array.slurm) ----
-N_MC=1500
+N_MC=3000
 SEED=2024
-APERTURE=15
+APERTURES="10 20 50 100 250 500 750 1000"
 CONTRAST=1e-10
 KOWA=32
 EXP_MIN=360
@@ -43,7 +43,7 @@ N_DRAWS=600
 
 python -u sensitivity.py --combine --tmp parts_sens \
     --n_mc ${N_MC} --seed ${SEED} \
-    --aperture ${APERTURE} --contrast ${CONTRAST} --kowa ${KOWA} \
+    --apertures ${APERTURES} --contrast ${CONTRAST} --kowa ${KOWA} \
     --exp_min ${EXP_MIN} --mode detection \
     --max_stars ${MAX_STARS} --n_draws ${N_DRAWS} \
     --out_dir results/sensitivity

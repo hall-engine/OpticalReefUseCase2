@@ -43,8 +43,9 @@ export MKL_NUM_THREADS=4
 
 mkdir -p logs
 
-# --- reference design point (edit to the headline design your paper quotes) ---
-APERTURE=15        # aperture diameter [m]  (e.g. 6=HWO, 8=LUVOIR-B, 15=LUVOIR-A)
+# --- design (this serial version is the SLOW path; prefer the array for the
+#     8-diameter sweep). Edit the diameters/contrast to your headline design. ---
+APERTURES="10 20 50 100 250 500 750 1000"   # aperture diameters [m]
 CONTRAST=1e-10     # coronagraph contrast floor
 KOWA=32            # DM format (64x64); 0 disables the OWA
 EXP_MIN=360        # detection integration time [min]
@@ -56,7 +57,7 @@ MAX_STARS=30000
 N_DRAWS=600
 
 python -u sensitivity.py \
-    --aperture ${APERTURE} --contrast ${CONTRAST} --kowa ${KOWA} \
+    --apertures ${APERTURES} --contrast ${CONTRAST} --kowa ${KOWA} \
     --exp_min ${EXP_MIN} --mode detection \
     --n_mc ${N_MC} --max_stars ${MAX_STARS} --n_draws ${N_DRAWS} \
     --out_dir results/sensitivity
