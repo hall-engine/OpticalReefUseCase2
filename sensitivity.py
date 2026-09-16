@@ -154,27 +154,77 @@ def run_oat(model, out_dir):
     return y0, c0, df
 
 
-def run_mc(model, n_mc, seed, out_dir):
-    print(f">> global Monte Carlo: {n_mc} parameter draws ...", flush=True)
+def draw_params(n_mc, seed):
+    """All n_mc parameter vectors, fixed by seed so any sharding is reproducible."""
     rng = np.random.default_rng(seed)
+    return {n: rng.uniform(PARAMS[n][1], PARAMS[n][2], size=n_mc)
+            for n in PARAMS}
+
+
+def evaluate(model, draws, idxs, label=""):
+    """Evaluate the yield for the given draw indices, with a log progress bar."""
     names = list(PARAMS.keys())
-    draws = {n: rng.uniform(PARAMS[n][1], PARAMS[n][2], size=n_mc) for n in names}
-    ys = np.empty(n_mc)
-    comps = np.empty(n_mc)
+    ys = np.empty(len(idxs))
+    comps = np.empty(len(idxs))
     t0 = time.time()
-    step = max(1, n_mc // 50)
-    for i in range(n_mc):
-        p = {n: draws[n][i] for n in names}
-        y, c = model.yield_of(p)
-        ys[i] = y
-        comps[i] = c
-        if (i + 1) % step == 0 or i + 1 == n_mc:
-            print("   " + _bar(i + 1, n_mc, t0), flush=True)
+    step = max(1, len(idxs) // 50)
+    for k, i in enumerate(idxs):
+        y, c = model.yield_of({n: float(draws[n][i]) for n in names})
+        ys[k] = y
+        comps[k] = c
+        if (k + 1) % step == 0 or k + 1 == len(idxs):
+            print(f"   {label}" + _bar(k + 1, len(idxs), t0), flush=True)
+    return ys, comps
+
+
+def run_mc(model, n_mc, seed, out_dir):
+    """Single-node full Monte Carlo (no sharding)."""
+    print(f">> global Monte Carlo: {n_mc} parameter draws ...", flush=True)
+    draws = draw_params(n_mc, seed)
+    idxs = np.arange(n_mc)
+    ys, comps = evaluate(model, draws, idxs)
     out = pd.DataFrame(draws)
     out["completeness"] = comps
     out["yield"] = ys
     out.to_csv(os.path.join(out_dir, "mc_samples.csv"), index=False)
     return ys
+
+
+def run_shard(model, n_mc, seed, shard, nshards, tmp_dir):
+    """Evaluate this shard's slice of the draws and write a partial file."""
+    draws = draw_params(n_mc, seed)
+    idxs = np.arange(n_mc)[shard::nshards]
+    print(f">> shard {shard}/{nshards}: {len(idxs)} of {n_mc} draws", flush=True)
+    ys, comps = evaluate(model, draws, idxs, label=f"shard{shard} ")
+    os.makedirs(tmp_dir, exist_ok=True)
+    part = os.path.join(tmp_dir, f"part_{shard:04d}.npz")
+    cols = {n: draws[n][idxs] for n in PARAMS}
+    np.savez(part, idx=idxs, y=ys, comp=comps, **cols)
+    print(f">> wrote {part}", flush=True)
+
+
+def combine_shards(tmp_dir, out_dir):
+    """Merge shard partials into the full ordered mc_samples; return the yields."""
+    import glob
+    files = sorted(glob.glob(os.path.join(tmp_dir, "part_*.npz")))
+    if not files:
+        raise SystemExit(f"no part_*.npz in {tmp_dir}")
+    print(f">> combining {len(files)} MC shards", flush=True)
+    idx = []
+    cols = {n: [] for n in PARAMS}
+    ys, comps = [], []
+    for f in files:
+        d = np.load(f)
+        idx.append(d["idx"]); ys.append(d["y"]); comps.append(d["comp"])
+        for n in PARAMS:
+            cols[n].append(d[n])
+    idx = np.concatenate(idx)
+    order = np.argsort(idx)
+    out = pd.DataFrame({n: np.concatenate(cols[n])[order] for n in PARAMS})
+    out["completeness"] = np.concatenate(comps)[order]
+    out["yield"] = np.concatenate(ys)[order]
+    out.to_csv(os.path.join(out_dir, "mc_samples.csv"), index=False)
+    return out["yield"].to_numpy()
 
 
 def make_plots(y0, oat_df, ys, out_dir):
@@ -224,21 +274,41 @@ def main():
     p.add_argument("--seed", type=int, default=2024)
     p.add_argument("--out_dir", default="results/sensitivity")
     p.add_argument("--no_plots", action="store_true")
+    # --- SLURM-array parallelism ---
+    p.add_argument("--shard", type=int, default=0)
+    p.add_argument("--nshards", type=int, default=1)
+    p.add_argument("--tmp", default="parts_sens",
+                   help="dir for partial MC files when sharding")
+    p.add_argument("--combine", action="store_true",
+                   help="merge shard partials in --tmp, then run OAT + outputs")
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     out_dir = os.path.join(base_dir, args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
+    tmp_dir = args.tmp if os.path.isabs(args.tmp) else os.path.join(base_dir, args.tmp)
 
     cfg = RunConfig()
     design = dict(D=args.aperture, contrast=args.contrast, kowa=args.kowa,
                   exp_s=args.exp_min * MIN)
     mode = dict(name=args.mode, R=args.spectral_R, snr=args.snr)
-    model = Model(cfg, base_dir, args.max_stars, args.n_draws, design, mode)
 
+    # ---- shard mode: evaluate a slice of the MC, write a partial, exit ----
+    if args.nshards > 1 and not args.combine:
+        model = Model(cfg, base_dir, args.max_stars, args.n_draws, design, mode)
+        run_shard(model, args.n_mc, args.seed, args.shard, args.nshards, tmp_dir)
+        return
+
+    # ---- combine mode: merge shards, then OAT + summary/plots ----
+    model = Model(cfg, base_dir, args.max_stars, args.n_draws, design, mode)
     t0 = time.time()
-    y0, c0, oat_df = run_oat(model, out_dir)
-    ys = run_mc(model, args.n_mc, args.seed, out_dir)
+    if args.combine:
+        ys = combine_shards(tmp_dir, out_dir)
+        y0, c0, oat_df = run_oat(model, out_dir)
+    else:
+        # ---- single-node full run ----
+        y0, c0, oat_df = run_oat(model, out_dir)
+        ys = run_mc(model, args.n_mc, args.seed, out_dir)
 
     pct = {q: float(np.percentile(ys, q)) for q in (2.5, 16, 50, 84, 97.5)}
     summary = dict(
