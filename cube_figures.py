@@ -152,6 +152,17 @@ def fig_3contrast(cube, args, out_dir):
                 e = cube.sem[:, ci, ei, ki] * mul * args.err_sigma
                 ax.fill_between(cube.ap, y - e, y + e, color=col, alpha=0.25,
                                 linewidth=0)
+        # discrete 1-sigma sampling-error bars on the longest-exposure curve,
+        # magnified by --err_inflate so the (tiny) bootstrap error is visible.
+        if cube.sem is not None and args.err_bars and args.err_sigma > 0:
+            ei = len(cube.tmin) - 1
+            y = cube.comp[:, ci, ei, ki] * mul
+            e = cube.sem[:, ci, ei, ki] * mul * args.err_sigma * args.err_inflate
+            keep = np.where(y > 0.02 * mul)[0]
+            pick = keep[np.linspace(0, len(keep) - 1, 8).astype(int)] if len(keep) else []
+            ax.errorbar(cube.ap[pick], y[pick], yerr=e[pick], fmt="o", ms=3.5,
+                        color="black", ecolor="black", elinewidth=1.1,
+                        capsize=3, capthick=1.1, zorder=9)
         ax.set_xscale("log")
         _ylims(ax, args.metric, ymax)
         ax.set_xlabel("Aperture diameter D [m]")
@@ -166,6 +177,14 @@ def fig_3contrast(cube, args, out_dir):
     axes[0].legend(handles=handles, loc="upper left", fontsize=8.5)
     _cbar(fig, list(axes), tcmap, norm, cube.tmin)
     fig.suptitle("yield vs aperture across contrast floors", fontsize=13)
+    if cube.sem is not None and args.err_bars:
+        # honest label: state the true 1-sigma and any magnification
+        med_pp = float(np.median(cube.sem[cube.comp > 0.02])) * 100.0
+        note = (f"error bars: {args.err_sigma:g}$\\sigma$ bootstrap sampling error"
+                f" (median 1$\\sigma\\approx${med_pp:.2f} pp of candidates)")
+        if args.err_inflate != 1.0:
+            note += f", shown $\\times${args.err_inflate:g} for visibility"
+        fig.text(0.5, 0.005, note, ha="center", fontsize=9, style="italic")
     out = os.path.join(out_dir, "cube_3contrast.png")
     fig.savefig(out, dpi=190, bbox_inches="tight")
     plt.close(fig)
@@ -253,6 +272,102 @@ def fig_kowa_sweetspot(cube, args, out_dir):
     print(f">> wrote {out}")
 
 
+def fig_error(cube, args, out_dir):
+    """Dedicated sampling-error figure: the bootstrap 1-sigma on the yield as a
+    quantity in its own right, vs aperture, one line per contrast floor.
+    Left = absolute (percentage points of candidates); right = relative (% of
+    the yield value). At the reference integration time and k_OWA."""
+    if cube.sem is None:
+        print(">> no completeness_sem in cube; skip error figure")
+        return
+    ki = _nearest(cube.kowa, args.kowa)
+    ei = _nearest(cube.tmin, args.time_min)
+    z = args.err_sigma
+    cidx = []
+    for c in args.panels:
+        j = _nearest(cube.con, c)
+        if j not in cidx:
+            cidx.append(j)
+    cols = plt.cm.viridis(np.linspace(0.15, 0.85, len(cidx)))
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12.5, 4.7))
+    for col, ci in zip(cols, cidx):
+        comp = cube.comp[:, ci, ei, ki]
+        sem = cube.sem[:, ci, ei, ki] * z
+        lab = f"{cube.con[ci]:.0e}"
+        axL.plot(cube.ap, sem * 100.0, "-o", color=col, lw=2, ms=3, label=lab)
+        rel = np.where(comp > 0.01, 100.0 * sem / np.maximum(comp, 1e-9), np.nan)
+        axR.plot(cube.ap, rel, "-o", color=col, lw=2, ms=3, label=lab)
+
+    for ax in (axL, axR):
+        ax.set_xscale("log")
+        ax.set_xlabel("Aperture diameter D [m]")
+        ax.grid(True, which="both", alpha=0.2)
+    axL.set_ylabel(f"{z:g}$\\sigma$ sampling error  [pp of candidates]")
+    axL.set_title("absolute bootstrap error", fontsize=11)
+    axR.set_ylabel(f"relative {z:g}$\\sigma$ error  [% of yield]")
+    axR.set_yscale("log")
+    axR.set_title("relative bootstrap error", fontsize=11)
+    axL.legend(title="contrast floor", fontsize=8.5, loc="upper right")
+    fig.suptitle(f"Bootstrap sampling error on the yield  "
+                 f"(t = {fmt_time(cube.tmin[ei])}, k$_{{OWA}}$ = {cube.kowa[ki]:g}, "
+                 f"N$_\\star$ = {cube.n_full:,})", fontsize=12.5)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(out_dir, "cube_error.png")
+    fig.savefig(out, dpi=190)
+    plt.close(fig)
+    print(f">> wrote {out}")
+
+
+def fig_error_by_time(cube, args, out_dir):
+    """One COLUMN-WIDTH figure per contrast floor: 1-sigma sampling error vs
+    aperture, one line per integration time (black -> orange). The error is a
+    +/- on the yield, explained on the side rather than as an axis unit."""
+    if cube.sem is None:
+        print(">> no completeness_sem in cube; skip per-time error figures")
+        return
+    ki = _nearest(cube.kowa, args.kowa)
+    z = args.err_sigma
+    bo = LinearSegmentedColormap.from_list(
+        "reef_bo", ["#141414", "#8a2b00", "#d24a00", "#ff9a1f"])
+    lo, hi = float(cube.tmin.min()), float(cube.tmin.max())
+    norm = LogNorm(vmin=lo, vmax=hi) if hi > lo else None
+
+    cidx = []
+    for c in args.panels:
+        j = _nearest(cube.con, c)
+        if j not in cidx:
+            cidx.append(j)
+
+    for ci in cidx:
+        fig, ax = plt.subplots(figsize=(3.7, 3.1), dpi=args.dpi)
+        for ei, t in enumerate(cube.tmin):
+            col = bo(1.0) if norm is None else bo(norm(t))
+            ax.plot(cube.ap, cube.sem[:, ci, ei, ki] * z * 100.0, "-",
+                    color=col, lw=1.8)
+        ax.set_xscale("log")
+        ax.set_xlabel("Aperture diameter D [m]", fontsize=11)
+        ax.set_ylabel(f"{z:g}$\\sigma$ yield uncertainty  [$\\pm$ pp]", fontsize=11)
+        ax.tick_params(labelsize=9)
+        ax.set_title(f"Sampling error  —  contrast {cube.con[ci]:.0e}",
+                     fontsize=11)
+        ax.grid(True, which="both", alpha=0.18)
+        if norm is not None:
+            sm = ScalarMappable(norm=norm, cmap=bo)
+            sm.set_array(cube.tmin)
+            cb = fig.colorbar(sm, ax=ax, pad=0.04, aspect=26)
+            cb.set_ticks(list(cube.tmin))
+            cb.set_ticklabels([f"{int(t)}" for t in cube.tmin])
+            cb.ax.tick_params(labelsize=5.5, length=2)
+            cb.set_label("exposure [min]", fontsize=7)
+        fig.subplots_adjust(left=0.17, right=0.91, top=0.91, bottom=0.16)
+        tag = f"{cube.con[ci]:.0e}".replace("-", "m").replace("+", "")
+        out = os.path.join(out_dir, f"cube_error_{tag}.png")
+        fig.savefig(out, dpi=args.dpi, bbox_inches="tight")
+        plt.close(fig)
+        print(f">> wrote {out}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -265,9 +380,18 @@ def main():
                    help="contrast floors to show as panels in the 3-contrast figure")
     p.add_argument("--kowa", type=float, default=32.0)
     p.add_argument("--time_min", type=float, default=360.0)
+    p.add_argument("--dpi", type=int, default=300,
+                   help="output resolution for the column error figures")
     p.add_argument("--err_sigma", type=float, default=1.0,
                    help="shade a +/- N-sigma sampling-error band (bootstrap SEM) "
                         "around each yield curve; 0 disables")
+    p.add_argument("--err_bars", action="store_true",
+                   help="overlay discrete 1-sigma error-bar markers on the "
+                        "longest-exposure curve (3-contrast figure)")
+    p.add_argument("--err_inflate", type=float, default=1.0,
+                   help="magnify the drawn error bars by this factor for "
+                        "visibility (annotated on the figure); true 1-sigma is "
+                        "err_inflate=1")
     args = p.parse_args()
 
     cube = Cube(args.cube)
@@ -281,6 +405,8 @@ def main():
     fig_3contrast(cube, args, out_dir)
     fig_combined(cube, args, out_dir)
     fig_kowa_sweetspot(cube, args, out_dir)
+    fig_error(cube, args, out_dir)
+    fig_error_by_time(cube, args, out_dir)
 
 
 if __name__ == "__main__":
