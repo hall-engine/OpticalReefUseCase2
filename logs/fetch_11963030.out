@@ -1,0 +1,46 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> fetch rand_fraction=0.1 (10.0-300.0 pc) in 334 chunks of 540,000 random_index each
+>> probing ESA archive (up to 20s) ...
+   ESA archive unavailable: ReadTimeout: HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=20.0
+>> probing ARI mirror (up to 20s) ...
+   ARI mirror unavailable: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+>> both servers down (probe round 1/30); waiting 120s ...
+>> probing ESA archive (up to 20s) ...
+   ESA archive unavailable: ReadTimeout: HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=20.0
+>> probing ARI mirror (up to 20s) ...
+   ARI mirror unavailable: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+>> both servers down (probe round 2/30); waiting 120s ...
+>> probing ESA archive (up to 20s) ...
+   ESA archive unavailable: ReadTimeout: HTTPSConnectionPool(host='gea.esac.esa.int', port=443): Read timed out. (read timeout=20.0
+>> probing ARI mirror (up to 20s) ...
+   using ARI mirror (953 rows)
+   chunk 1/334 [ARI mirror]: 953 rows
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 2/334 [ARI mirror]: 1005 rows (cumulative 1,958, 617s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 3/334 [ARI mirror]: 974 rows (cumulative 2,932, 961s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 4/334 [ARI mirror]: 959 rows (cumulative 3,891, 1266s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 5/334 [ARI mirror]: 987 rows (cumulative 4,878, 1561s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 6/334 [ARI mirror]: 1001 rows (cumulative 5,879, 1854s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 7/334 [ARI mirror]: 958 rows (cumulative 6,837, 2158s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 8/334 [ARI mirror]: 972 rows (cumulative 7,809, 2500s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 9/334 [ARI mirror]: 1013 rows (cumulative 8,822, 2716s elapsed)
+   chunk 10/334 [ARI mirror]: 995 rows (cumulative 9,817, 2725s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+     attempt 2/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+   chunk 11/334 [ARI mirror]: 974 rows (cumulative 10,791, 2990s elapsed)
+     attempt 1/5 failed: ReadTimeout: HTTPSConnectionPool(host='gaia.ari.uni-heidelberg.de', port=443): Read timed out. (read ti
+[2026-09-13T15:38:36.247] error: *** JOB 11963030 ON a01-13 CANCELLED AT 2026-09-13T15:38:36 DUE to SIGNAL Terminated ***

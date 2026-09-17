@@ -1,0 +1,4 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> cube axes: 45 D x 5 contrast x 12 time x 6 kOWA  | mode=detection | draws=2000 | shard 17/24
+   stars 3366/3366
+>> wrote shard /home1/hahall/OpticalReefUseCase2/OpticalReefUseCase2/parts_fine/part_0017.npz

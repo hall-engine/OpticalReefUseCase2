@@ -1,0 +1,20 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> model: 30,000 sim stars (of 80,778 full), 600 draws | design D=15.0m contrast=1e-10 k_OWA=32 t=360min
+>> combining 20 MC shards
+>> OAT sensitivity (vary each parameter alone) ...
+   [1/9] eta_earth         Y:    16.65 ..    83.27  (Y0=39.97)
+   [2/9] geometric_albedo  Y:    26.87 ..    50.87  (Y0=39.97)
+   [3/9] nzodi_level       Y:    44.65 ..    31.63  (Y0=39.97)
+   [4/9] sigma_sys         Y:    42.65 ..    33.11  (Y0=39.97)
+   [5/9] eta_inst          Y:    35.48 ..    43.60  (Y0=39.97)
+   [6/9] eta_coron         Y:    29.46 ..    48.55  (Y0=39.97)
+   [7/9] hz_inner_au       Y:    39.14 ..    39.94  (Y0=39.97)
+   [8/9] hz_outer_au       Y:    41.86 ..    38.68  (Y0=39.97)
+   [9/9] radius_factor     Y:    25.82 ..    54.32  (Y0=39.97)
+>> wrote tornado.png, mc_hist.png
+
+>> DONE in 340s
+>> baseline yield Y0 = 39.97
+>> systematic band (68%): 21.51 .. 68.72  (median 39.96, +/-52% 1-sigma)
+>> dominant parameter: eta_earth
+SENSITIVITY (parallel) DONE -> results/sensitivity/summary.json

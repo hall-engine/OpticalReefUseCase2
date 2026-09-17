@@ -1,0 +1,5 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> cube axes: 30 D x 5 contrast x 8 time x 6 kOWA  | mode=detection | draws=2000 | shard 0/1
+   stars 20000/80778   stars 40000/80778   stars 60000/80778   stars 80000/80778   stars 80778/80778
+>> wrote /home1/hahall/OpticalReefUseCase2/OpticalReefUseCase2/cube.h5  (completeness (30, 5, 8, 6), n_full=80778, format=h5)
+DONE -> cube.h5  (download it; build figures locally with cube_figures.py)

@@ -1,0 +1,18 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> model: 30,000 sim stars (of 80,778 full), 600 draws | design D=15.0m contrast=1e-10 k_OWA=32 t=360min
+>> OAT sensitivity (vary each parameter alone) ...
+   [1/9] eta_earth         Y:    16.65 ..    83.27  (Y0=39.97)
+   [2/9] geometric_albedo  Y:    26.87 ..    50.87  (Y0=39.97)
+   [3/9] nzodi_level       Y:    44.65 ..    31.63  (Y0=39.97)
+   [4/9] sigma_sys         Y:    42.65 ..    33.11  (Y0=39.97)
+   [5/9] eta_inst          Y:    35.48 ..    43.60  (Y0=39.97)
+   [6/9] eta_coron         Y:    29.46 ..    48.55  (Y0=39.97)
+   [7/9] hz_inner_au       Y:    39.14 ..    39.94  (Y0=39.97)
+   [8/9] hz_outer_au       Y:    41.86 ..    38.68  (Y0=39.97)
+   [9/9] radius_factor     Y:    25.82 ..    54.32  (Y0=39.97)
+>> global Monte Carlo: 1500 parameter draws ...
+   [   30/1500   2.0%] |----------------------------| elapsed   531s  eta 25997s
+   [   60/1500   4.0%] |#---------------------------| elapsed  1057s  eta 25368s
+   [   90/1500   6.0%] |#---------------------------| elapsed  1533s  eta 24011s
+   [  120/1500   8.0%] |##--------------------------| elapsed  2015s  eta 23168s
+[2026-09-16T13:31:40.341] error: *** JOB 12088026 ON a01-04 CANCELLED AT 2026-09-16T13:31:40 DUE to SIGNAL Terminated ***

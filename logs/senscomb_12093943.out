@@ -1,0 +1,25 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> model: 30,000 sim stars (of 80,778 full), 600 draws | 8 apertures [10.0, 20.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0] | contrast=1e-10 k_OWA=32 t=360min
+>> combining 50 MC shards
+>> OAT sensitivity (per aperture) ...
+   [1/9] eta_earth
+   [2/9] geometric_albedo
+   [3/9] nzodi_level
+   [4/9] sigma_sys
+   [5/9] eta_inst
+   [6/9] eta_coron
+   [7/9] hz_inner_au
+   [8/9] hz_outer_au
+   [9/9] radius_factor
+>> wrote collective figures + 8 individual tornados/hists
+
+>> DONE in 394s
+   D=    10 m:  median   10.70  68% [   5.16,   19.91]  (+/-60%)
+   D=    20 m:  median   91.74  68% [  48.20,  159.22]  (+/-54%)
+   D=    50 m:  median 1330.19  68% [ 686.66, 2327.95]  (+/-55%)
+   D=   100 m:  median 10611.67  68% [5492.46, 18558.28]  (+/-55%)
+   D=   250 m:  median 102039.03  68% [55675.59, 159074.33]  (+/-44%)
+   D=   500 m:  median 161920.72  68% [89035.95, 239071.20]  (+/-40%)
+   D=   750 m:  median 163588.42  68% [89904.24, 241316.27]  (+/-40%)
+   D=  1000 m:  median 151716.42  68% [82679.42, 221727.09]  (+/-39%)
+SENSITIVITY (parallel) DONE -> results/sensitivity/summary.json

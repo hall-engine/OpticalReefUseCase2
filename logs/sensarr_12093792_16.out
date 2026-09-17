@@ -1,0 +1,11 @@
+using python: /home1/hahall/.conda/envs/optical_reef/bin/python
+>> model: 30,000 sim stars (of 80,778 full), 600 draws | design D=15.0m contrast=1e-10 k_OWA=32 t=360min
+>> shard 16/20: 75 of 1500 draws
+   shard16 [    1/75   1.3%] |----------------------------| elapsed    18s  eta  1346s
+   shard16 [    2/75   2.7%] |----------------------------| elapsed    35s  eta  1271s
+   shard16 [    3/75   4.0%] |#---------------------------| elapsed    51s  eta  1235s
+   shard16 [    4/75   5.3%] |#---------------------------| elapsed    68s  eta  1209s
+   shard16 [    5/75   6.7%] |#---------------------------| elapsed    85s  eta  1187s
+   shard16 [    6/75   8.0%] |##--------------------------| elapsed   101s  eta  1166s
+   shard16 [    7/75   9.3%] |##--------------------------| elapsed   118s  eta  1147s
+[2026-09-16T15:52:35.144] error: *** JOB 12093811 ON b09-07 CANCELLED AT 2026-09-16T15:52:35 DUE to SIGNAL Terminated ***
