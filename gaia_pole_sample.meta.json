@@ -2,7 +2,8 @@
   "rand_fraction": 0.1,
   "dist_min_pc": 10.0,
   "dist_max_pc": 300.0,
-  "n_rows": 324622,
+  "ruwe_max": 1.4,
+  "n_rows": 290563,
   "n_fetch_chunks": 334,
   "n_chunks_planned": 334,
   "n_chunks_missing": 0
