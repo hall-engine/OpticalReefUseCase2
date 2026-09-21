@@ -48,7 +48,7 @@ ORBIT_SEED = 12345
 
 PARAMS = {
     "eta_earth":        (0.24, 0.10, 0.50),
-    "geometric_albedo": (0.30, 0.20, 0.40),
+    "geometric_albedo": (0.20, 0.10, 0.35),   # Earth-twin V-band A_g (central 0.20)
     "nzodi_level":      (3.0,  1.0,  10.0),
     "sigma_sys":        (0.10, 0.05, 0.20),
     "eta_inst":         (0.20, 0.15, 0.25),
@@ -58,6 +58,19 @@ PARAMS = {
     "radius_factor":    (1.0,  0.8,  1.2),
 }
 BASELINE = {k: v[0] for k, v in PARAMS.items()}
+
+# symbolic labels for figures
+LABELS = {
+    "eta_earth":        r"$\eta_\oplus$",
+    "geometric_albedo": r"$A_g$",
+    "nzodi_level":      r"$n_\mathrm{zodi}$",
+    "sigma_sys":        r"$\sigma_\mathrm{sys}$",
+    "eta_inst":         r"$\eta_\mathrm{inst}$",
+    "eta_coron":        r"$\eta_\mathrm{cor}$",
+    "hz_inner_au":      r"$a_\mathrm{HZ,in}$",
+    "hz_outer_au":      r"$a_\mathrm{HZ,out}$",
+    "radius_factor":    r"$R_p$",
+}
 
 
 def _bar(done, total, t0, width=28):
@@ -238,6 +251,12 @@ def make_plots(mc_df, oat_df, out_dir, ref_ap):
     from matplotlib.colors import LogNorm
     from matplotlib.lines import Line2D
 
+    # column-width figures, fonts matched to the other paper figures
+    plt.rcParams.update({"axes.titlesize": 10, "axes.labelsize": 11,
+                         "xtick.labelsize": 9, "ytick.labelsize": 9,
+                         "legend.fontsize": 8})
+    COL = (3.7, 3.27)         # single-column size, aspect matched to cube_error figs
+
     aps = _apertures_from(mc_df)
     ind_dir = os.path.join(out_dir, "individual")
     os.makedirs(ind_dir, exist_ok=True)
@@ -253,6 +272,7 @@ def make_plots(mc_df, oat_df, out_dir, ref_ap):
         stats[d] = dict(
             median=np.median(y), p16=np.percentile(y, 16), p84=np.percentile(y, 84),
             p2p5=np.percentile(y, 2.5), p97p5=np.percentile(y, 97.5),
+            ymin=y.min(), ymax=y.max(),
             mean=y.mean(), std=y.std(),
             rel=y.std()/max(y.mean(), 1e-9), rel_noeta=z.std()/max(z.mean(), 1e-9))
 
@@ -264,64 +284,87 @@ def make_plots(mc_df, oat_df, out_dir, ref_ap):
     ledges = np.linspace(np.log10(np.percentile(allv, 0.2)),
                          np.log10(allv.max()), 55)
     lctr = 10 ** (0.5 * (ledges[:-1] + ledges[1:]))
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(4.1, 3.0))
     for d in aps:
         y = mc_df[_dcol(d)].to_numpy()
         y = y[y > 0]
         c, _ = np.histogram(np.log10(y), bins=ledges, density=True)
-        ax.plot(lctr, c, color=cmap(norm(d)), lw=1.9)
+        ax.plot(lctr, c, color=cmap(norm(d)), lw=1.6)
     ax.set_xscale("log")
     ax.set_xlabel("expected yield  (log scale)"); ax.set_ylabel("probability density")
-    ax.set_title("Systematic yield distribution per aperture")
+    ax.set_title("Yield distribution per aperture")
     sm = ScalarMappable(norm=norm, cmap=cmap); sm.set_array(np.asarray(aps, float))
-    cb = fig.colorbar(sm, ax=ax); cb.set_label("aperture D [m]")
+    cb = fig.colorbar(sm, ax=ax); cb.set_label("aperture D [m]", fontsize=8)
     cb.set_ticks(aps); cb.set_ticklabels([f"{d:g}" for d in aps])
-    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "mc_hist_overlay.png"), dpi=180)
+    cb.ax.tick_params(labelsize=6.5)
+    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "mc_hist_overlay.png"),
+                                    dpi=200, bbox_inches="tight")
     plt.close(fig)
 
     # ---------- COLLECTIVE 2: sensitivity vs diameter (collective tornado) ----------
-    fig, ax = plt.subplots(figsize=(8.5, 5))
+    fig, ax = plt.subplots(figsize=COL)
     pcmap = plt.cm.tab10(np.linspace(0, 1, len(PARAMS)))
     for c, name in zip(pcmap, PARAMS):
         s = oat_df[oat_df["parameter"] == name].sort_values("diameter")
         ax.plot(s["diameter"].to_numpy(), s["abs_range"].to_numpy(), "-o",
-                color=c, ms=3.5, lw=1.8, label=name)
-    ax.set_xscale("log"); ax.set_yscale("log")
-    ax.set_xlabel("aperture D [m]"); ax.set_ylabel("|yield swing| across parameter range")
-    ax.set_title("Parameter sensitivity vs aperture (collective tornado)")
-    ax.grid(True, which="both", alpha=0.2)
-    ax.legend(fontsize=8, ncol=2)
-    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "oat_vs_diameter.png"), dpi=180)
+                color=c, ms=3, lw=1.5, label=LABELS.get(name, name))
+    ax.set_yscale("log")                                # linear aperture axis
+    ax.set_xlabel("aperture D [m]"); ax.set_ylabel("|yield swing|")
+    ax.set_title("Parameter sensitivity vs aperture")
+    ax.grid(True, which="major", alpha=0.2)             # per-decade gridlines only
+    ax.legend(fontsize=7.5, ncol=3, loc="upper left", handlelength=1.1,
+              columnspacing=0.8, labelspacing=0.3)
+    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "oat_vs_diameter.png"),
+                                    dpi=200)
     plt.close(fig)
 
     # ---------- COLLECTIVE 3: yield band vs aperture ----------
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=COL)
     flr = lambda v: max(v, 0.1)                        # keep log axis finite
     med = [stats[d]["median"] for d in aps]
+    # faint full range (max deviation either side of the median)
+    ax.fill_between(aps, [flr(stats[d]["ymin"]) for d in aps],
+                    [stats[d]["ymax"] for d in aps], color="#1f77b4", alpha=0.06,
+                    label="full range")
     ax.fill_between(aps, [flr(stats[d]["p2p5"]) for d in aps],
-                    [stats[d]["p97p5"] for d in aps], color="#1f77b4", alpha=0.15,
-                    label="95%")
+                    [stats[d]["p97p5"] for d in aps], color="#1f77b4", alpha=0.16,
+                    label="2$\\sigma$")
     ax.fill_between(aps, [flr(stats[d]["p16"]) for d in aps],
                     [stats[d]["p84"] for d in aps], color="#1f77b4", alpha=0.35,
-                    label="68%")
-    ax.plot(aps, med, "o-", color="#08306b", lw=2, label="median")
-    ax.set_xscale("log"); ax.set_yscale("log"); ax.set_xlabel("aperture D [m]")
-    ax.set_ylabel("expected yield"); ax.set_title("Yield with systematic band vs aperture")
-    ax.grid(True, which="both", alpha=0.2); ax.legend()
-    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "band_vs_aperture.png"), dpi=180)
+                    label="1$\\sigma$")
+    ax.plot(aps, med, "o-", color="#08306b", lw=1.8, ms=3.5, label="median")
+    ax.set_yscale("log"); ax.set_xlabel("aperture D [m]")   # linear aperture axis
+    ax.set_ylabel("expected yield")
+    ax.set_title("Yield variation from parameter uncertainty")
+    ax.grid(True, which="major", alpha=0.2)                # major (per-decade) only
+    ax.legend(fontsize=7.5, loc="lower right")
+    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "band_vs_aperture.png"),
+                                    dpi=200)
     plt.close(fig)
 
     # ---------- COLLECTIVE 4: relative systematic vs aperture ----------
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(aps, [100*stats[d]["rel"] for d in aps], "o-", color="#d62728",
-            lw=2, label="total 1$\\sigma$")
-    ax.plot(aps, [100*stats[d]["rel_noeta"] for d in aps], "s--", color="#F5821F",
-            lw=2, label="$\\eta_\\oplus$ removed (floor on measuring $\\eta_\\oplus$)")
-    ax.set_xscale("log"); ax.set_xlabel("aperture D [m]")
-    ax.set_ylabel("relative systematic 1$\\sigma$ [%]")
-    ax.set_title("Systematic uncertainty vs aperture"); ax.grid(True, which="both", alpha=0.2)
-    ax.legend()
-    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "relsigma_vs_diameter.png"), dpi=180)
+    fig, ax = plt.subplots(figsize=COL)
+    yv = [100*stats[d]["rel_noeta"] for d in aps]
+    ax.plot(aps, yv, "s--", color="#F5821F", lw=1.8, ms=4)
+    # value boxes with an orange leader line pointing at each data point
+    off = {10: (-4, 26), 100: (24, 22), 250: (26, 20),
+           500: (0, 26), 750: (0, 26), 1000: (-10, 26)}
+    for d, v in zip(aps, yv):
+        if d in off:
+            ax.annotate(f"{v:.1f}%", xy=(d, v), xytext=off[d],
+                        textcoords="offset points", ha="center", fontsize=7,
+                        color="#9a4a00",
+                        arrowprops=dict(arrowstyle="-", color="#F5821F", lw=0.9),
+                        bbox=dict(boxstyle="round,pad=0.2", fc="white",
+                                  ec="#F5821F", lw=0.9, alpha=0.95))
+    ax.set_xlabel("aperture D [m]")                     # linear aperture axis
+    ax.set_ylabel("best 1$\\sigma$ uncertainty on $\\eta_\\oplus$  "
+                  "[$\\pm$% of $\\eta_\\oplus$]")
+    ax.set_title("$\\eta_\\oplus$ precision vs aperture")
+    ax.set_ylim(0, max(yv) * 1.28)
+    ax.grid(True, which="major", alpha=0.2)
+    fig.tight_layout(); fig.savefig(os.path.join(out_dir, "relsigma_vs_diameter.png"),
+                                    dpi=200)
     plt.close(fig)
 
     # ---------- INDIVIDUAL per aperture ----------
@@ -334,7 +377,8 @@ def make_plots(mc_df, oat_df, out_dir, ref_ap):
             ax.barh(k, r["Y_high"] - r["Y_low"], left=min(r["Y_low"], r["Y_high"]),
                     color="#F5821F", alpha=0.85)
         ax.axvline(y0, color="black", ls="--", lw=1, label=f"baseline = {y0:.1f}")
-        ax.set_yticks(range(len(s))); ax.set_yticklabels(s["parameter"])
+        ax.set_yticks(range(len(s)))
+        ax.set_yticklabels([LABELS.get(pp, pp) for pp in s["parameter"]])
         ax.set_xlabel("expected yield"); ax.legend()
         ax.set_title(f"OAT tornado  —  D = {d:g} m")
         fig.tight_layout(); fig.savefig(os.path.join(ind_dir, f"tornado_D{d:g}.png"), dpi=160)

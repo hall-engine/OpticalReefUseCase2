@@ -1,0 +1,7 @@
+{
+  "rand_fraction": 1.0,
+  "dist_min_pc": 1.0,
+  "dist_max_pc": 40.0,
+  "poe_min": 5.0,
+  "n_rows": 8613
+}

@@ -59,18 +59,22 @@ class RateLimiter:
 _LIMITER = None   # set in main() from --delay
 
 
-def chunk_query(lo, hi, dist_min_pc, dist_max_pc):
+def chunk_query(lo, hi, dist_min_pc, dist_max_pc, ruwe_max=1.4):
     parallax_max = 1000.0 / dist_min_pc
     parallax_min = 1000.0 / dist_max_pc
     return (
         "SELECT g.source_id, g.ra, g.dec, g.parallax, g.parallax_over_error, "
-        "g.phot_g_mean_mag, g.random_index, "
+        "g.phot_g_mean_mag, g.random_index, g.ruwe, "
         "ap.teff_gspphot, ap.logg_gspphot, ap.lum_flame, "
         "ap.mass_flame, ap.radius_flame "
         "FROM gaiadr3.gaia_source AS g "
         "JOIN gaiadr3.astrophysical_parameters AS ap ON g.source_id = ap.source_id "
         f"WHERE g.parallax BETWEEN {parallax_min} AND {parallax_max} "
         "AND g.parallax_over_error > 5 "
+        # astrometric-quality cut: RUWE < ruwe_max rejects sources whose
+        # single-star fit is poor -- mostly unresolved binaries, whose blended
+        # photometry corrupts lum_flame (hence the HZ) and inflates n_full.
+        f"AND g.ruwe < {ruwe_max} "
         "AND ap.lum_flame IS NOT NULL "
         "AND ap.teff_gspphot IS NOT NULL "
         "AND ap.logg_gspphot IS NOT NULL "
@@ -90,7 +94,7 @@ def fetch_chunk(url, query, timeout):
 
 def fetch_one(url, lo, hi, args):
     """Fetch a single chunk with a few quick retries. Returns a DataFrame."""
-    q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc)
+    q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc, args.ruwe_max)
     last = None
     for attempt in range(1, args.retries + 1):
         try:
@@ -103,7 +107,7 @@ def fetch_one(url, lo, hi, args):
 
 def probe(lo, hi, args):
     """Try servers in order on one chunk; return (name, url) of the first that works."""
-    q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc)
+    q = chunk_query(lo, hi, args.dist_min_pc, args.dist_max_pc, args.ruwe_max)
     for name, url in SERVERS:
         print(f">> probing {name} (up to {args.probe_timeout:.0f}s) ...", flush=True)
         try:
@@ -143,6 +147,10 @@ def main():
     p.add_argument("--rand_fraction", type=float, default=0.1)
     p.add_argument("--dist_min_pc", type=float, default=10.0)
     p.add_argument("--dist_max_pc", type=float, default=300.0)
+    p.add_argument("--ruwe_max", type=float, default=1.4,
+                   help="reject sources with RUWE >= this (likely unresolved "
+                        "binaries / bad astrometry). 1.4 is the Gaia-standard cut; "
+                        "set a huge value (e.g. 99) to disable.")
     p.add_argument("--chunk_size", type=int, default=540_000,
                    help="random_index span per chunk (~955 rows/~9s at this value)")
     p.add_argument("--workers", type=int, default=6,
@@ -203,6 +211,7 @@ def main():
         json.dump({"rand_fraction": args.rand_fraction,
                    "dist_min_pc": args.dist_min_pc,
                    "dist_max_pc": args.dist_max_pc,
+                   "ruwe_max": args.ruwe_max,
                    "n_rows": int(len(cat)),
                    "n_fetch_chunks": got,
                    "n_chunks_planned": len(ranges),

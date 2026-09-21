@@ -23,8 +23,12 @@ from config import SurveyConfig, MonteCarloConfig, AU_M, PC_M
 
 REQUIRED_COLUMNS = [
     "source_id", "ra", "dec", "parallax", "phot_g_mean_mag",
-    "teff_gspphot", "logg_gspphot", "lum_flame",
+    "teff_gspphot", "logg_gspphot", "lum_flame", "ruwe",
 ]
+# `ruwe` is required so the pipeline can only ever run on an astrometrically
+# clean pull (fetch_local/fetch_nearby apply RUWE < ruwe_max at query time and
+# record it in the .meta.json). A pre-RUWE CSV lacks the column and is rejected
+# here rather than silently yielding an un-cut, binary-contaminated sample.
 
 
 # --------------------------------------------------------------------------

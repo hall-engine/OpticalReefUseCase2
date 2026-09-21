@@ -108,7 +108,10 @@ class MonteCarloConfig:
 
     # Planet properties (Earth analog).
     planet_radius_m: float = R_EARTH_M
-    geometric_albedo: float = 0.30
+    geometric_albedo: float = 0.20   # Earth-twin V-band geometric albedo
+    #   (~0.2 at quadrature; the older 0.30 over-brightened the planet by ~50%.
+    #    A_g is still swept as a nuisance in sensitivity.py, so the error bars
+    #    span the plausible 0.1-0.4 range around this central value.)
 
 
 # --------------------------------------------------------------------------
